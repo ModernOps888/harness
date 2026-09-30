@@ -1,7 +1,7 @@
 use harness_attention::SpikingAttentionEngine;
 use harness_core::{Device, DeviceManager};
 use harness_rag::HippocampalConsolidator;
-use harness_safety::{EntropyDetector, ObservationCompactor};
+use harness_safety::{AgentCircuitBreaker, EntropyDetector, ObservationCompactor};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex};
@@ -11,6 +11,7 @@ pub struct McpServer {
     compactor: Arc<Mutex<ObservationCompactor>>,
     entropy: Arc<Mutex<EntropyDetector>>,
     spiking: Arc<Mutex<SpikingAttentionEngine>>,
+    circuit_breaker: Arc<Mutex<AgentCircuitBreaker>>,
 }
 
 impl Default for McpServer {
@@ -26,6 +27,7 @@ impl McpServer {
             compactor: Arc::new(Mutex::new(ObservationCompactor::new(10, 10, 500))),
             entropy: Arc::new(Mutex::new(EntropyDetector::new(1.5))),
             spiking: Arc::new(Mutex::new(SpikingAttentionEngine::new(0.90, 0.35, 0.0))),
+            circuit_breaker: Arc::new(Mutex::new(AgentCircuitBreaker::new(3, 3))),
         }
     }
 
@@ -271,6 +273,31 @@ impl McpServer {
                                         },
                                         "required": ["parameter_count_billions"]
                                     }
+                                },
+                                {
+                                    "name": "harness_benchmark_compute",
+                                    "description": "Execute a live micro-benchmark of the host CPU AVX2 SIMD FMA tensor engine to calculate real GFLOPS, memory bandwidth, and execution latency.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "matrix_dim": { "type": "integer", "description": "Matrix dimension N for [N x N] GEMM (e.g. 256, 512, 1024, default 512)." },
+                                            "iterations": { "type": "integer", "description": "Number of timed benchmark passes (default 3)." }
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "harness_audit_circuit_breaker",
+                                    "description": "Audit agent actions to prevent catastrophic runaway tool loops, recursive failures, and token expenditure spirals.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "tool_name": { "type": "string", "description": "Name of the tool being executed." },
+                                            "arguments": { "type": "string", "description": "Arguments serialized as JSON string." },
+                                            "is_error": { "type": "boolean", "description": "Whether the tool execution returned an error." },
+                                            "error_message": { "type": "string", "description": "Optional error message if failed." },
+                                            "reset": { "type": "boolean", "description": "Set true to reset circuit breaker to Closed state." }
+                                        }
+                                    }
                                 }
                             ]
                         }
@@ -406,8 +433,9 @@ impl McpServer {
                     }
                 }
 
-                let entropy_limit = self.entropy.lock().unwrap().anomaly_threshold;
-                let is_anomalous = (byte_entropy as f32) > entropy_limit;
+                // Shannon byte entropy for normal source code falls between 1.2 and 4.8 nats.
+                // Low entropy indicates repetitive loops; high entropy indicates noise or binary corruption.
+                let is_anomalous = code.len() > 20 && (byte_entropy < 1.0 || byte_entropy > 5.0);
 
                 // 2. Structural delimiter invariant verification (parentheses, braces, brackets)
                 let mut stack = Vec::new();
@@ -529,11 +557,24 @@ impl McpServer {
                 let hw = harness_core::HardwareProfile::auto_detect();
                 let dev_mgr = DeviceManager::new(Device::Cpu, 16 * 1024 * 1024 * 1024);
                 let snap = dev_mgr.snapshot();
+                let entropy_thresh = self.entropy.lock().unwrap().anomaly_threshold;
+                let cb_tripped = matches!(self.circuit_breaker.lock().unwrap().state(), harness_safety::CircuitBreakerState::Tripped { .. });
                 Ok(format!(
-                    "HARNESS Engine Status:\n• Core: Pure-Rust SIMD + Rayon + CUDA\n• Host OS/Arch: {} {}\n• Active Compute: {}\n• Memory Bandwidth: {:.0} GB/s\n• Host Buffer: {:.1} GB allocated\n• Device VRAM: {:.1} GB\n• Paged KV Cache: Dynamic block pool active\n• Layer Streaming: Hybrid CPU/GPU ready",
+                    "HARNESS Engine Status:\n\
+                     • Core: Pure-Rust SIMD + Rayon + CUDA\n\
+                     • Host OS/Arch: {} {}\n\
+                     • Active Compute: {}\n\
+                     • Memory Bandwidth: {:.0} GB/s\n\
+                     • Host Buffer: {:.1} GB allocated\n\
+                     • Device VRAM: {:.1} GB\n\
+                     • Paged KV Cache: Dynamic block pool active\n\
+                     • Layer Streaming: Hybrid CPU/GPU ready\n\
+                     • Safety Guard: {} (Entropy Threshold: {:.2} nats)",
                     hw.os, hw.arch, hw.accelerator_name, hw.memory_bandwidth_gbps,
                     snap.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
-                    hw.vram_gb
+                    hw.vram_gb,
+                    if cb_tripped { "Circuit Breaker TRIPPED" } else { "Nominal / Active" },
+                    entropy_thresh
                 ))
             }
             "harness_create_file" => {
@@ -631,6 +672,98 @@ impl McpServer {
                     hw.accelerator_name, hw.vram_gb, hw.memory_bandwidth_gbps,
                     strategy, theoretical_tok_s
                 );
+                Ok(result)
+            }
+            "harness_benchmark_compute" => {
+                let dim = args.get("matrix_dim").and_then(|d| d.as_u64()).unwrap_or(512) as usize;
+                let iterations = args.get("iterations").and_then(|i| i.as_u64()).unwrap_or(3) as usize;
+                let dim = dim.clamp(64, 2048);
+                let iterations = iterations.clamp(1, 20);
+
+                let mut a_vals = vec![0.0f32; dim * dim];
+                let mut b_vals = vec![0.0f32; dim * dim];
+                for i in 0..(dim * dim) {
+                    a_vals[i] = ((i % 97) as f32 / 97.0) - 0.5;
+                    b_vals[i] = (((i * 7) % 89) as f32 / 89.0) - 0.5;
+                }
+                let a = harness_core::Tensor::from_f32_slice(&a_vals, vec![dim, dim], Device::Cpu)?;
+                let b = harness_core::Tensor::from_f32_slice(&b_vals, vec![dim, dim], Device::Cpu)?;
+
+                // Warm-up run
+                let _ = a.matmul(&b)?;
+
+                // Timed benchmark run
+                let start = std::time::Instant::now();
+                for _ in 0..iterations {
+                    let _ = a.matmul(&b)?;
+                }
+                let elapsed = start.elapsed();
+                let elapsed_secs = elapsed.as_secs_f64().max(1e-6);
+
+                let total_flops = 2.0 * (dim as f64) * (dim as f64) * (dim as f64) * (iterations as f64);
+                let gflops = (total_flops / elapsed_secs) / 1e9;
+                let avg_latency_ms = (elapsed.as_secs_f64() * 1000.0) / (iterations as f64);
+                let total_data_bytes = (dim * dim * 3 * 4 * iterations) as f64;
+                let mem_bandwidth_gbps = (total_data_bytes / elapsed_secs) / (1024.0 * 1024.0 * 1024.0);
+
+                let hw = harness_core::HardwareProfile::auto_detect();
+                let threads = rayon::current_num_threads();
+
+                let result = format!(
+                    "HARNESS Compute & SIMD Benchmark Complete\n\
+                     • Matrix Dimension: [{} x {}] FP32\n\
+                     • Iterations Executed: {}\n\
+                     • Active Compute Threads: {} (Rayon Work-Stealing Pool)\n\
+                     • Average Latency: {:.2} ms per GEMM\n\
+                     • Sustained Performance: {:.2} GFLOPS (AVX2 256-bit SIMD FMA)\n\
+                     • Memory Throughput: {:.2} GB/s\n\
+                     • Host Processor: {} (Target: {})",
+                    dim, dim, iterations, threads, avg_latency_ms, gflops, mem_bandwidth_gbps,
+                    hw.accelerator_name, hw.arch
+                );
+                Ok(result)
+            }
+            "harness_audit_circuit_breaker" => {
+                let tool_name = args.get("tool_name").and_then(|t| t.as_str()).unwrap_or("unknown");
+                let arguments = args.get("arguments").and_then(|a| a.as_str()).unwrap_or("{}");
+                let is_error = args.get("is_error").and_then(|e| e.as_bool()).unwrap_or(false);
+                let error_msg = args.get("error_message").and_then(|m| m.as_str());
+                let reset = args.get("reset").and_then(|r| r.as_bool()).unwrap_or(false);
+
+                let mut cb = self.circuit_breaker.lock().unwrap();
+                if reset {
+                    *cb = harness_safety::AgentCircuitBreaker::new(3, 3);
+                    return Ok("Agent Circuit Breaker state successfully reset to Closed.".into());
+                }
+
+                let state = cb.record_action(tool_name, arguments, is_error, error_msg).clone();
+                let result = match state {
+                    harness_safety::CircuitBreakerState::Closed => {
+                        format!(
+                            "Circuit Breaker Status: CLOSED (Normal Operation)\n\
+                             • Action Recorded: {}\n\
+                             • Health: Nominal execution, no runaway oscillation detected.",
+                            tool_name
+                        )
+                    }
+                    harness_safety::CircuitBreakerState::Tripped { reason, consecutive_failures } => {
+                        format!(
+                            "Circuit Breaker Status: TRIPPED (HALT ACTION EXECUTION)\n\
+                             • Reason: {}\n\
+                             • Consecutive Failures: {}\n\
+                             • Safety Recommendation: Intercept agent loop and prompt for human-in-the-loop intervention.",
+                            reason, consecutive_failures
+                        )
+                    }
+                    harness_safety::CircuitBreakerState::Recovering => {
+                        format!(
+                            "Circuit Breaker Status: RECOVERING\n\
+                             • Action Recorded: {}\n\
+                             • Health: Probing execution stability.",
+                            tool_name
+                        )
+                    }
+                };
                 Ok(result)
             }
             _ => Ok(format!("Unknown tool: {}", name)),

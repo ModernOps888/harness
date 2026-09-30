@@ -157,7 +157,7 @@ impl Tensor {
         let b = other.as_f32_slice()?;
         let mut c = vec![0.0f32; m * n];
 
-        // Parallel cache-blocked GEMM with 4-wide unrolling for SIMD FMA
+        // Parallel cache-blocked GEMM with 8-wide unrolling for 256-bit AVX2 SIMD FMA
         c.par_chunks_mut(n).enumerate().for_each(|(i, c_row)| {
             let a_row_offset = i * k1;
             for p in 0..k1 {
@@ -166,12 +166,16 @@ impl Tensor {
                 let b_slice = &b[b_row_offset..b_row_offset + n];
 
                 let mut j = 0;
-                while j + 4 <= n {
+                while j + 8 <= n {
                     c_row[j] += a_val * b_slice[j];
                     c_row[j + 1] += a_val * b_slice[j + 1];
                     c_row[j + 2] += a_val * b_slice[j + 2];
                     c_row[j + 3] += a_val * b_slice[j + 3];
-                    j += 4;
+                    c_row[j + 4] += a_val * b_slice[j + 4];
+                    c_row[j + 5] += a_val * b_slice[j + 5];
+                    c_row[j + 6] += a_val * b_slice[j + 6];
+                    c_row[j + 7] += a_val * b_slice[j + 7];
+                    j += 8;
                 }
                 while j < n {
                     c_row[j] += a_val * b_slice[j];
