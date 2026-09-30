@@ -328,7 +328,7 @@ impl BackendProxy {
                 };
 
                 let resp = self.client
-                    .post(&self.config.chat_url())
+                    .post(self.config.chat_url())
                     .json(&req_body)
                     .send()
                     .await
@@ -369,7 +369,7 @@ impl BackendProxy {
                     max_tokens,
                 };
 
-                let mut request = self.client.post(&self.config.chat_url()).json(&req_body);
+                let mut request = self.client.post(self.config.chat_url()).json(&req_body);
                 if let Some(ref key) = self.config.api_key {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }
@@ -434,7 +434,7 @@ impl BackendProxy {
                 };
 
                 let resp = match self.client
-                    .post(&self.config.chat_url())
+                    .post(self.config.chat_url())
                     .json(&req_body)
                     .send()
                     .await {
@@ -511,7 +511,7 @@ impl BackendProxy {
                     max_tokens,
                 };
 
-                let mut request = self.client.post(&self.config.chat_url()).json(&req_body);
+                let mut request = self.client.post(self.config.chat_url()).json(&req_body);
                 if let Some(ref key) = self.config.api_key {
                     request = request.header("Authorization", format!("Bearer {}", key));
                 }

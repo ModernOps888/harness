@@ -1,5 +1,4 @@
-use std::collections::{HashMap, VecDeque};
-use uuid::Uuid;
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CircuitBreakerState {

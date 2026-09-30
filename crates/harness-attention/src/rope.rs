@@ -33,6 +33,10 @@ impl RotaryEmbedding {
         }
     }
 
+    pub fn theta(&self) -> f32 {
+        self.theta
+    }
+
     /// Apply Rotary Embedding to query or key tensor [num_tokens, num_heads, head_dim]
     pub fn apply(&self, x: &mut [f32], start_pos: usize, _num_tokens: usize, num_heads: usize) {
         let head_dim = self.dim;

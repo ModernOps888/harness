@@ -13,6 +13,12 @@ pub struct McpServer {
     spiking: Arc<Mutex<SpikingAttentionEngine>>,
 }
 
+impl Default for McpServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl McpServer {
     pub fn new() -> Self {
         Self {

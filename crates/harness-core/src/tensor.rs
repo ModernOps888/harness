@@ -176,7 +176,7 @@ impl Tensor {
         let x = self.as_f32_slice()?;
         let w = weight.as_f32_slice()?;
         let hidden_dim = *self.shape.last().unwrap_or(&1);
-        let num_tokens = self.numel() / hidden_dim;
+        let _num_tokens = self.numel() / hidden_dim;
 
         let mut out = vec![0.0f32; self.numel()];
 

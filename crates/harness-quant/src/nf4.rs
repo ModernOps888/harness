@@ -1,4 +1,4 @@
-use harness_core::{DType, Device, Result, Shape, Tensor};
+use harness_core::{Device, Result, Shape, Tensor};
 use rayon::prelude::*;
 
 // Standard 16 NF4 quantization bin centers

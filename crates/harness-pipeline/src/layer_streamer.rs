@@ -1,6 +1,5 @@
 use harness_attention::KVCache;
-use harness_core::{Device, DeviceManager, HarnessError, ModelConfig, Result, Tensor};
-use std::sync::Arc;
+use harness_core::{ModelConfig, Result, Tensor};
 use tracing::info;
 
 /// Double-buffered GPU slot for layer streaming
@@ -79,14 +78,14 @@ impl TemporalLayerStreamer {
         kv_caches: &mut [KVCache],
         layer_runner: impl Fn(usize, &Tensor, usize, &mut KVCache) -> Result<Tensor>,
     ) -> Result<Tensor> {
-        for l in 0..self.total_layers {
-            let (active_slot, next_prefetch) = self.stage_layer(l);
+        for (l, kv_cache) in kv_caches.iter_mut().enumerate().take(self.total_layers) {
+            let (_active_slot, next_prefetch) = self.stage_layer(l);
 
             // Execute current layer
-            hidden_states = layer_runner(l, &hidden_states, start_pos, &mut kv_caches[l])?;
+            hidden_states = layer_runner(l, &hidden_states, start_pos, kv_cache)?;
 
             // Next layer has been prefetched asynchronously via DMA
-            if let Some(next_l) = next_prefetch {
+            if let Some(_next_l) = next_prefetch {
                 // In full CUDA backend, this synchronizes the CUDA stream event for next_l
             }
         }

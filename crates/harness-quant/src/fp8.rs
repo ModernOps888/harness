@@ -1,4 +1,4 @@
-use harness_core::{DType, Device, Result, Shape, Tensor};
+use harness_core::{Device, Result, Shape, Tensor};
 use rayon::prelude::*;
 
 /// Quantize F32 tensor to FP8 (E4M3 representation with per-tensor scale)

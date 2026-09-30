@@ -34,7 +34,7 @@ impl TokenSampler {
         generated_history: &[u32],
     ) -> Result<u32> {
         let logits_slice = logits.as_f32_slice()?;
-        let vocab_size = logits_slice.len();
+        let _vocab_size = logits_slice.len();
 
         let mut filtered: Vec<(usize, f32)> = logits_slice
             .iter()
@@ -118,7 +118,7 @@ impl TokenSampler {
         }
 
         // 9. Renormalize & random choice
-        let mut total_p = probs.iter().map(|(_, p)| *p).sum::<f32>();
+        let total_p = probs.iter().map(|(_, p)| *p).sum::<f32>();
         if total_p <= 1e-8 {
             return Ok(probs.first().map(|(idx, _)| *idx as u32).unwrap_or(0));
         }

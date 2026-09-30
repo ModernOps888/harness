@@ -31,8 +31,8 @@ pub trait CausalLM: Send + Sync {
         let mut h = self.embed(token_ids)?;
         let num_layers = self.config().num_hidden_layers;
 
-        for layer_idx in 0..num_layers {
-            h = self.forward_layer(layer_idx, &h, start_pos, &mut kv_caches[layer_idx])?;
+        for (layer_idx, kv_cache) in kv_caches.iter_mut().enumerate().take(num_layers) {
+            h = self.forward_layer(layer_idx, &h, start_pos, kv_cache)?;
         }
 
         self.lm_head(&h)

@@ -1,5 +1,5 @@
 use harness_attention::{flash_attention_v3, FlashAttentionConfig, KVCache, RotaryEmbedding};
-use harness_core::{ModelConfig, Result, Tensor};
+use harness_core::{Result, Tensor};
 
 pub struct TransformerBlock {
     pub layer_idx: usize,
@@ -21,8 +21,8 @@ impl TransformerBlock {
     pub fn forward(
         &self,
         x: &Tensor,
-        start_pos: usize,
-        kv_cache: &mut KVCache,
+        _start_pos: usize,
+        _kv_cache: &mut KVCache,
     ) -> Result<Tensor> {
         // 1. Input RMSNorm
         let normed = x.rms_norm(&self.input_norm_weight, self.eps)?;

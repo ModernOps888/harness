@@ -348,6 +348,7 @@ pub async fn chat_completions(
 // SSE Streaming: real tokens from backend, enhanced by HARNESS
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn stream_from_backend(
     req_id: String,
     model: String,

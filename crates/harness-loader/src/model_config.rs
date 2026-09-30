@@ -1,4 +1,4 @@
-use harness_core::{HarnessError, ModelArchitecture, ModelConfig, QuantizationMode, Result};
+use harness_core::{ModelArchitecture, ModelConfig, QuantizationMode, Result};
 use std::fs::File;
 use std::path::Path;
 

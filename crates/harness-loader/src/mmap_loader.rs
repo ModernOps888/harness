@@ -136,4 +136,8 @@ impl MmapModelLoader {
     pub fn total_weights_bytes(&self) -> usize {
         self.weights.values().map(|w| w.byte_len).sum()
     }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }

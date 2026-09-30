@@ -1,4 +1,4 @@
-use harness_core::{Device, DeviceManager, ModelConfig, Result};
+use harness_core::{DeviceManager, ModelConfig};
 use std::ops::Range;
 use tracing::info;
 

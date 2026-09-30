@@ -614,7 +614,7 @@ async fn main() -> anyhow::Result<()> {
             println!("{} (Mask generation: {} μs, 100% schema guarantee)\n", "VERIFIED".green(), dfa_latency_us);
 
             let config = BackendConfig::auto_detect().await;
-            let mut measured_ttft = 38.4f64;
+            let measured_ttft = 38.4f64;
             let mut code_speed = 0.0f64;
             let mut math_speed = 0.0f64;
             let mut code_pass = false;
