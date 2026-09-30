@@ -170,7 +170,7 @@ impl McpServer {
                                         "type": "object",
                                         "properties": {
                                             "prompt": { "type": "string", "description": "The coding or query prompt to evaluate." },
-                                            "model": { "type": "string", "description": "Target model: Qwen3.8-27B-ISQ, Llama-4-Scout-70B, or DeepSeek-V4-MoE." },
+                                            "model": { "type": "string", "description": "Target model: Qwen2.5-Coder-7B, Llama-3.3-70B, or Llama-4-Scout-109B-MoE." },
                                             "constrained_mode": { "type": "string", "description": "none | json_schema | tool_call | ebnf" },
                                             "spiking_threshold": { "type": "number", "description": "Bio-SNN threshold (0.10 to 0.50) for sparse attention." }
                                         },
