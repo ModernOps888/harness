@@ -1,3 +1,4 @@
+use crate::backend::{BackendConfig, BackendProxy};
 use harness_attention::{PagedAttentionManager, RadixPrefixCache};
 use harness_core::{DeviceManager, ModelConfig};
 use harness_pipeline::{BatchedInferenceEngine, SpeculativeDecoder};
@@ -18,6 +19,7 @@ pub struct AppState {
     pub speculative: Arc<Mutex<SpeculativeDecoder>>,
     pub confidence_scorer: Arc<ConfidenceScorer>,
     pub rag_store: Arc<VectorStore>,
+    pub backend: Arc<BackendProxy>,
     pub start_time: Instant,
     pub total_tokens_streamed: Arc<AtomicUsize>,
 }
@@ -32,6 +34,7 @@ impl AppState {
         let speculative = Arc::new(Mutex::new(SpeculativeDecoder::new(4)));
         let confidence_scorer = Arc::new(ConfidenceScorer::new(0.85));
         let rag_store = Arc::new(VectorStore::new(4096));
+        let backend = Arc::new(BackendProxy::new(BackendConfig::default()));
 
         Self {
             model_name: Arc::new(RwLock::new("Qwen3.8-27B-ISQ".into())),
@@ -43,9 +46,15 @@ impl AppState {
             speculative,
             confidence_scorer,
             rag_store,
+            backend,
             start_time: Instant::now(),
             total_tokens_streamed: Arc::new(AtomicUsize::new(0)),
         }
+    }
+
+    pub fn with_backend(mut self, config: BackendConfig) -> Self {
+        self.backend = Arc::new(BackendProxy::new(config));
+        self
     }
 
     pub fn record_tokens(&self, count: usize) {

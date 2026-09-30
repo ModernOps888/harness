@@ -23,4 +23,5 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+serde_json = { workspace = true }
 colored = "2.1"
