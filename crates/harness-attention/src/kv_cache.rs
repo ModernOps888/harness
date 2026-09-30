@@ -1,4 +1,4 @@
-use harness_core::{DType, Device, Result, Shape, Tensor};
+use harness_core::{DType, Device, Result, Tensor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KVCacheCompression {
@@ -17,7 +17,7 @@ pub struct KVCache {
 
 impl KVCache {
     pub fn new(
-        num_layers: usize,
+        _num_layers: usize,
         num_kv_heads: usize,
         head_dim: usize,
         max_seq_len: usize,
@@ -43,7 +43,7 @@ impl KVCache {
         })
     }
 
-    pub fn append(&mut self, k_new: &Tensor, v_new: &Tensor) -> Result<()> {
+    pub fn append(&mut self, k_new: &Tensor, _v_new: &Tensor) -> Result<()> {
         let new_tokens = k_new.shape()[0];
         if self.current_len + new_tokens > self.max_seq_len {
             return Err(harness_core::HarnessError::Attention(

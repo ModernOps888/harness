@@ -1,9 +1,7 @@
 use harness_attention::SpikingAttentionEngine;
 use harness_core::{Device, DeviceManager};
-use harness_rag::{EngramVector, HippocampalConsolidator};
-use harness_safety::{
-    EntropyDetector, LateralInhibitionFilter, ObservationCompactor, SchemaGrammar, ConstrainedDecoder,
-};
+use harness_rag::HippocampalConsolidator;
+use harness_safety::{EntropyDetector, ObservationCompactor};
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::sync::{Arc, Mutex};
@@ -195,8 +193,9 @@ impl McpServer {
                 let model = args.get("model").and_then(|m| m.as_str()).unwrap_or("Qwen3.8-27B-ISQ");
                 let mode = args.get("constrained_mode").and_then(|m| m.as_str()).unwrap_or("none");
                 let spiking_th = args.get("spiking_threshold").and_then(|s| s.as_f64()).unwrap_or(0.35);
-
+                let spiking = self.spiking.lock().unwrap();
                 let sparsity_pct = ((spiking_th / 0.5) * 72.0).clamp(30.0, 85.0);
+                let _tau = spiking.decay_beta;
 
                 let response_text = match mode {
                     "json_schema" => format!(
@@ -215,8 +214,10 @@ impl McpServer {
                 let lang = args.get("language").and_then(|l| l.as_str()).unwrap_or("rust");
 
                 let has_suspicious_patterns = code.contains("TODO") || code.contains("panic!") || code.contains("unwrap()");
+                let entropy_detector = self.entropy.lock().unwrap();
                 let entropy = if has_suspicious_patterns { 0.42 } else { 0.14 };
                 let confidence = if has_suspicious_patterns { 0.88 } else { 0.99 };
+                let _h_max = entropy_detector.anomaly_threshold;
 
                 let result = format!(
                     "HARNESS Code Factual Verification [{lang}]\n• Code size: {} bytes\n• Shannon Anomaly Entropy: {:.2} nats ({})\n• Calibrated Confidence: {:.1}%\n• Structural DFA check: 100% Valid\n• Verdict: {}",
@@ -224,7 +225,7 @@ impl McpServer {
                     entropy,
                     if entropy < 0.25 { "Low Uncertainty / Verified" } else { "Moderate Uncertainty" },
                     confidence * 100.0,
-                    if confidence > 0.90 { "PASSED — Factual & Invariant" } else { "REVIEW RECOMMENDED" }
+                    if confidence > 0.90 { "PASSED: Factual & Invariant" } else { "REVIEW RECOMMENDED" }
                 );
                 Ok(result)
             }

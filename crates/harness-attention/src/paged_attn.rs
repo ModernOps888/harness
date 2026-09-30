@@ -1,7 +1,5 @@
 use harness_core::{HarnessError, Result};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub type BlockId = usize;

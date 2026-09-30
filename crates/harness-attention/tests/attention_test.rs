@@ -1,8 +1,7 @@
 use harness_attention::{
-    AttentionSinkManager, ChunkedPrefillEngine, MultiHeadLatentAttention, PagedAttentionManager,
+    AttentionSinkManager, ChunkedPrefillEngine, MultiHeadLatentAttention,
 };
 use harness_core::Device;
-use uuid::Uuid;
 
 #[test]
 fn test_attention_sink_manager_rolling_window() {
@@ -46,4 +45,29 @@ fn test_multi_head_latent_attention_compression() {
     // MLA caches only 512 latent dimensions -> 93.75% reduction!
     let ratio = mla.compression_ratio();
     assert!(ratio > 0.90);
+}
+
+#[test]
+fn test_radix_prefix_cache_reuse() {
+    use harness_attention::RadixPrefixCache;
+    let mut cache = RadixPrefixCache::new();
+
+    // Cache a system prompt token sequence with physical block IDs [101, 102]
+    let sys_tokens = vec![1, 1500, 2048, 99];
+    let sys_blocks = vec![101, 102];
+    cache.insert(&sys_tokens, &sys_blocks);
+
+    assert_eq!(cache.total_cached_tokens(), 4);
+
+    // Query 1: Matching prefix
+    let query_tokens = vec![1, 1500, 2048, 99, 4200, 888];
+    let (matched_len, reusable_blocks) = cache.match_prefix(&query_tokens);
+    assert_eq!(matched_len, 4);
+    assert_eq!(reusable_blocks, vec![101, 102]);
+
+    // Query 2: Non-matching prefix
+    let non_matching = vec![2, 1500, 2048];
+    let (no_match_len, no_blocks) = cache.match_prefix(&non_matching);
+    assert_eq!(no_match_len, 0);
+    assert!(no_blocks.is_empty());
 }

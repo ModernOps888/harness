@@ -5,7 +5,7 @@
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20(Metal)%20%7C%20Windows%20(CUDA%2FROCm)-blueviolet.svg)](#multi-os-hardware-auto-detection)
 
-**HARNESS** is a high-performance, pure-Rust neural inference engine and autonomous agent runtime designed to overcome the critical memory and latency walls of modern large language models. By fusing high-throughput systems programming with biological primitives from evolutionary neuroscience—such as **Leaky Integrate-and-Fire (LIF) Spiking Attention**, **Hippocampal Dual-Memory Consolidation (CLS Theory)**, **Cortical Lateral Inhibition**, and **Stigmergic Ant Colony Search**—HARNESS achieves state-of-the-art inference efficiency, enabling **70B parameter models to run smoothly within 8GB VRAM consumer GPUs** at real-time streaming speeds.
+**HARNESS** is a high-performance, pure-Rust neural inference engine and autonomous agent runtime designed to overcome the critical memory and latency walls of modern large language models. By fusing high-throughput systems programming with biological primitives from evolutionary neuroscience (such as **Leaky Integrate-and-Fire (LIF) Spiking Attention**, **Hippocampal Dual-Memory Consolidation (CLS Theory)**, **Cortical Lateral Inhibition**, and **Stigmergic Ant Colony Search**), HARNESS achieves state-of-the-art inference efficiency, enabling **70B parameter models to run smoothly within 8GB VRAM consumer GPUs** at real-time streaming speeds.
 
 ---
 

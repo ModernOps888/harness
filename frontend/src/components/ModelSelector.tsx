@@ -15,7 +15,7 @@ export interface ModelOption {
 export const AVAILABLE_MODELS: ModelOption[] = [
   {
     id: 'Qwen3.8-27B-ISQ',
-    name: 'Qwen 3.8 — 27B ISQ',
+    name: 'Qwen 3.8: 27B ISQ',
     family: 'Alibaba Cloud',
     params: '27B Dense',
     quant: 'ISQ (Q4_K_M + FP8)',
@@ -25,13 +25,33 @@ export const AVAILABLE_MODELS: ModelOption[] = [
   },
   {
     id: 'Llama-4-Scout-70B-LayerStream',
-    name: 'Llama 4 Scout — 70B Stream',
+    name: 'Llama 4 Scout: 70B Stream',
     family: 'Meta Open-Weight',
     params: '70B MoE/Dense',
     quant: 'Q4_K_M Layer-Stream',
     context: '128k',
     mode: '70B-LayerStream',
     badgeColor: 'border-cyan-500/40 text-cyan-400 bg-cyan-500/10',
+  },
+  {
+    id: 'Qwen-2.5-72B-Instruct',
+    name: 'Qwen 2.5: 72B Instruct',
+    family: 'Alibaba Cloud',
+    params: '72B Dense (UMA 128GB)',
+    quant: 'Q4_K_M / FP8',
+    context: '131k',
+    mode: '70B-LayerStream',
+    badgeColor: 'border-teal-500/40 text-teal-400 bg-teal-500/10',
+  },
+  {
+    id: 'DeepSeek-R1-671B-SparseMoE',
+    name: 'DeepSeek R1: 671B Sparse MoE',
+    family: 'DeepSeek AI',
+    params: '671B (37B Active)',
+    quant: 'FP8 / 2-bit Ternary',
+    context: '163k',
+    mode: 'Sparse-MoE',
+    badgeColor: 'border-purple-500/40 text-purple-400 bg-purple-500/10',
   },
   {
     id: 'DeepSeek-V4.1-Flash-MoE',
