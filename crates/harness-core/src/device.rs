@@ -57,11 +57,20 @@ impl HardwareProfile {
         // 2. Detect Accelerators (NVIDIA, AMD, Apple Metal)
         let (accelerator_name, accelerator_device, vram_gb) = detect_accelerator(&os);
 
-        // 3. Apple Silicon Unified Memory Architecture (UMA) Detection
+        // 3. Apple Silicon Unified Memory Architecture (UMA) Detection (M3, M4, M5 generations)
         let is_unified_memory = os == "macos";
         let memory_bandwidth_gbps = if is_unified_memory {
-            // Apple Silicon UMA bandwidth: base (150 GB/s), Pro (300 GB/s), Max/Ultra (400-800+ GB/s)
-            if host_ram_gb >= 64.0 { 800.0 } else if host_ram_gb >= 36.0 { 400.0 } else if host_ram_gb >= 24.0 { 300.0 } else { 150.0 }
+            // M3/M4/M5 UMA Bandwidth Matrix:
+            // Base (M3: 100, M4: 120, M5: 153 GB/s)
+            // Pro (M3 Pro: 150, M4 Pro: 273, M5 Pro: 350 GB/s)
+            // Max (M3 Max: 400, M4 Max: 546, M5 Max: 650 GB/s)
+            // Ultra (M2/M4/M5 Ultra: 800 - 1300+ GB/s)
+            if host_ram_gb >= 128.0 { 1092.0 } // Ultra tier
+            else if host_ram_gb >= 64.0 { 546.0 } // Max tier (M4 Max 40-core GPU)
+            else if host_ram_gb >= 36.0 { 400.0 } // High Pro / Max baseline
+            else if host_ram_gb >= 24.0 { 273.0 } // M4 Pro (273 GB/s via 8533 MT/s LPDDR5X)
+            else if host_ram_gb >= 16.0 { 120.0 } // M4 base (120 GB/s) / M3 Pro
+            else { 100.0 }                        // M3 base (100 GB/s)
         } else if vram_gb >= 24.0 {
             1008.0 // GDDR6X on RTX 3090/4090
         } else if vram_gb >= 8.0 {
