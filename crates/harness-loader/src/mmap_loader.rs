@@ -28,14 +28,21 @@ pub struct MmapModelLoader {
 impl MmapModelLoader {
     /// Open a file and memory-map it directly to virtual address space
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let p = path.as_ref().to_path_buf();
-        let file = File::open(&p)?;
+        let p = path.as_ref();
+        if !p.exists() || !p.is_file() {
+            return Err(HarnessError::ModelLoad(format!(
+                "Model weight path does not exist or is not a valid file: {:?}",
+                p
+            )));
+        }
+        let canonical_path = p.canonicalize()?;
+        let file = File::open(&canonical_path)?;
         let mmap = unsafe { Mmap::map(&file)? };
 
-        info!(path = ?p, size_bytes = mmap.len(), "Memory-mapped model weights file");
+        info!(path = ?canonical_path, size_bytes = mmap.len(), "Memory-mapped model weights file");
 
         let mut loader = Self {
-            path: p,
+            path: canonical_path,
             mmap: Arc::new(mmap),
             weights: HashMap::new(),
         };
