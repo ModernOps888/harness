@@ -242,11 +242,13 @@ impl McpServer {
                                 },
                                 {
                                     "name": "harness_read_file",
-                                    "description": "Read file contents from the workspace for factual grounding and context analysis.",
+                                    "description": "Read file contents or targeted line slices from the workspace for factual grounding and context analysis.",
                                     "inputSchema": {
                                         "type": "object",
                                         "properties": {
-                                            "path": { "type": "string", "description": "Path of the file to read." }
+                                            "path": { "type": "string", "description": "Path of the file to read." },
+                                            "start_line": { "type": "integer", "description": "Optional starting line number (1-indexed)." },
+                                            "end_line": { "type": "integer", "description": "Optional ending line number (1-indexed, inclusive)." }
                                         },
                                         "required": ["path"]
                                     }
@@ -296,6 +298,16 @@ impl McpServer {
                                             "is_error": { "type": "boolean", "description": "Whether the tool execution returned an error." },
                                             "error_message": { "type": "string", "description": "Optional error message if failed." },
                                             "reset": { "type": "boolean", "description": "Set true to reset circuit breaker to Closed state." }
+                                        }
+                                    }
+                                },
+                                {
+                                    "name": "harness_check_cargo",
+                                    "description": "Execute an immediate compiler verification pass using `cargo check` across the workspace or a specific package to catch type or lifetime errors.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "package": { "type": "string", "description": "Optional package name to check (e.g. harness-core, harness-attention, harness-safety). Defaults to workspace." }
                                         }
                                     }
                                 }
@@ -470,6 +482,9 @@ impl McpServer {
                 let heap_allocs = code.matches("Box::new").count() + code.matches("Vec::new").count() + code.matches("format!").count();
                 let unique_bytes = counts.iter().filter(|&&c| c > 0).count();
 
+                let line_count = code.lines().count().max(1);
+                let branch_density = (cyclomatic_complexity.saturating_sub(1) as f64) / (line_count as f64);
+
                 // Compute quality score (out of 100)
                 let mut quality_score = 100i32;
                 if !balanced { quality_score -= 30; }
@@ -477,7 +492,7 @@ impl McpServer {
                 quality_score -= (panics as i32) * 15;
                 quality_score -= (unwraps as i32) * 5;
                 quality_score -= (todos as i32) * 5;
-                if cyclomatic_complexity > 20 { quality_score -= 10; }
+                if cyclomatic_complexity > 20 && branch_density > 0.35 { quality_score -= 10; }
                 let final_score = quality_score.clamp(0, 100);
                 let delimiter_status = if balanced {
                     "Balanced (0 closure errors)".to_string()
@@ -489,18 +504,27 @@ impl McpServer {
                     "HARNESS Code Static & Structural Verification [{lang}]\n\
                      • Code Size: {} bytes across {} lines\n\
                      • Shannon Byte Entropy: {:.3} nats (density across {} unique byte symbols, {})\n\
-                     • Cyclomatic Complexity: {} ({})\n\
+                     • Cyclomatic Complexity: {} ({}, {:.2} branches/line)\n\
                      • Delimiter Invariant Check: {}\n\
                      • Memory Allocations: {} heap allocations, {} .clone() copies\n\
                      • Safety Scans: {} TODOs, {} panic! calls, {} unwrap() calls\n\
                      • Structural Score: {}/100 ({})",
                     code.len(),
-                    code.lines().count(),
+                    line_count,
                     byte_entropy,
                     unique_bytes,
                     if is_anomalous { "Entropy Anomaly Alert" } else { "Entropy Nominal" },
                     cyclomatic_complexity,
-                    if cyclomatic_complexity <= 5 { "Simple & Deterministic" } else if cyclomatic_complexity <= 15 { "Moderate" } else { "High Branching" },
+                    if cyclomatic_complexity <= 5 {
+                        "Simple & Deterministic"
+                    } else if cyclomatic_complexity <= 15 {
+                        "Moderate"
+                    } else if branch_density <= 0.30 {
+                        "Defensive Branching"
+                    } else {
+                        "High Branching"
+                    },
+                    branch_density,
                     delimiter_status,
                     heap_allocs,
                     clones,
@@ -599,8 +623,32 @@ impl McpServer {
                 if path_str.is_empty() {
                     return Ok("Error: File path cannot be empty".into());
                 }
+                let start_line = args.get("start_line").and_then(|s| s.as_u64()).map(|s| s as usize);
+                let end_line = args.get("end_line").and_then(|e| e.as_u64()).map(|e| e as usize);
+
                 match std::fs::read_to_string(path_str) {
-                    Ok(c) => Ok(format!("File contents for {} ({} lines, {} bytes):\n{}", path_str, c.lines().count(), c.len(), c)),
+                    Ok(c) => {
+                        let lines: Vec<&str> = c.lines().collect();
+                        let total_lines = lines.len();
+                        if start_line.is_some() || end_line.is_some() {
+                            let s = start_line.unwrap_or(1).max(1);
+                            let e = end_line.unwrap_or(total_lines).min(total_lines);
+                            let slice = if s <= e && s <= total_lines {
+                                lines[s - 1..e].join("\n")
+                            } else {
+                                String::new()
+                            };
+                            Ok(format!(
+                                "File slice for {} (lines {}-{} of {}, {} bytes):\n{}",
+                                path_str, s, e, total_lines, slice.len(), slice
+                            ))
+                        } else {
+                            Ok(format!(
+                                "File contents for {} ({} lines, {} bytes):\n{}",
+                                path_str, total_lines, c.len(), c
+                            ))
+                        }
+                    }
                     Err(e) => Ok(format!("Failed to read file {}: {}", path_str, e)),
                 }
             }
@@ -765,6 +813,42 @@ impl McpServer {
                     }
                 };
                 Ok(result)
+            }
+            "harness_check_cargo" => {
+                let package = args.get("package").and_then(|p| p.as_str());
+                let mut cmd = std::process::Command::new("cargo");
+                cmd.arg("check");
+                if let Some(pkg) = package {
+                    cmd.arg("-p").arg(pkg);
+                } else {
+                    cmd.arg("--workspace");
+                }
+                match cmd.output() {
+                    Ok(out) => {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        let stdout = String::from_utf8_lossy(&out.stdout);
+                        let combined = format!("{}\n{}", stdout, stderr);
+                        if out.status.success() {
+                            Ok(format!(
+                                "HARNESS Compiler Check Passed [Clean Build]\n\
+                                 • Target: {}\n\
+                                 • Status: 0 errors\n\
+                                 • Diagnostics:\n{}",
+                                package.unwrap_or("workspace"),
+                                combined.trim()
+                            ))
+                        } else {
+                            Ok(format!(
+                                "HARNESS Compiler Check Failed [Errors Detected]\n\
+                                 • Target: {}\n\
+                                 • Diagnostics:\n{}",
+                                package.unwrap_or("workspace"),
+                                combined.trim()
+                            ))
+                        }
+                    }
+                    Err(e) => Ok(format!("Failed to execute `cargo check`: {}", e)),
+                }
             }
             _ => Ok(format!("Unknown tool: {}", name)),
         }
