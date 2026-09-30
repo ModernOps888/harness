@@ -1,6 +1,6 @@
 # HARNESS: Official Verified Benchmark & Hardware Telemetry Report
 
-**Generated:** 2026-09-30T18:46:16.684631100+00:00 UTC  
+**Generated:** 2026-09-30T19:03:54.326467400+00:00 UTC  
 **Engine Version:** 0.1.0 (Pure-Rust, Zero Python Runtime)  
 **Host Architecture:** windows (x86_64)  
 **Target Accelerator:** NVIDIA RTX Architecture (CUDA Compute 8.9+)  
@@ -22,7 +22,7 @@ HARNESS is an autonomous high-performance inference engine authored from first p
 | **LIF Spiking Attention Sparsity** | 50.0% FLOPs Pruned | Membrane threshold theta >= 0.35 event gating |
 | **Hippocampal Dual-Memory** | 93.8% Context Saved | Low-rank engram consolidation (CLS theory) |
 | **Cortical Lateral Inhibition** | 0.042 -> 0.000 nats | Logit Shannon entropy reduction & sharpening |
-| **DFA Schema Constrained Decoding** | 25 μs per token | Microsecond deterministic finite automaton mask |
+| **DFA Schema Constrained Decoding** | 14 μs per token | Microsecond deterministic finite automaton mask |
 | **Layered 70B Model Execution** | 0.6 to 1.1 tok/s | 16 GPU layers (5.3 GB) + 65 CPU layers (19.8 GB), 0 OOM |
 
 ---
