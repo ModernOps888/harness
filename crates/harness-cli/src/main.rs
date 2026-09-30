@@ -173,7 +173,8 @@ async fn main() -> anyhow::Result<()> {
             println!("  • Host Operating System:   {} ({})", hw.os.green(), hw.arch.cyan());
             println!("  • System Host RAM:         {:.1} GB", hw.host_ram_gb);
             println!("  • Detected Accelerator:    {} [{}]", hw.accelerator_name.yellow(), hw.accelerator_device);
-
+            println!("  • Unified Memory (UMA):    {}", if hw.is_unified_memory { "YES (Apple Silicon Zero-Copy Metal)".bold().green() } else { "NO (Discrete PCIe Bus Architecture)".white() });
+            println!("  • Peak Memory Bandwidth:   {:.0} GB/s", hw.memory_bandwidth_gbps);
             let effective_vram = vram_gb.unwrap_or(hw.vram_gb as usize);
             println!("  • Effective VRAM Budget:   {} GB", effective_vram.to_string().cyan());
             println!("  • Optimal 70B Strategy:    {}", hw.recommended_70b_strategy.bold().green());

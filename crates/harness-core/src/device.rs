@@ -39,6 +39,8 @@ pub struct HardwareProfile {
     pub accelerator_name: String,
     pub accelerator_device: Device,
     pub vram_gb: f32,
+    pub is_unified_memory: bool,
+    pub memory_bandwidth_gbps: f32,
     pub recommended_70b_strategy: String,
     pub max_supported_context: usize,
 }
@@ -55,8 +57,32 @@ impl HardwareProfile {
         // 2. Detect Accelerators (NVIDIA, AMD, Apple Metal)
         let (accelerator_name, accelerator_device, vram_gb) = detect_accelerator(&os);
 
-        // 3. Formulate optimal execution strategy for 70B models
-        let (recommended_strategy, max_context) = if vram_gb >= 40.0 {
+        // 3. Apple Silicon Unified Memory Architecture (UMA) Detection
+        let is_unified_memory = os == "macos";
+        let memory_bandwidth_gbps = if is_unified_memory {
+            // Apple Silicon UMA bandwidth: base (150 GB/s), Pro (300 GB/s), Max/Ultra (400-800+ GB/s)
+            if host_ram_gb >= 64.0 { 800.0 } else if host_ram_gb >= 36.0 { 400.0 } else if host_ram_gb >= 24.0 { 300.0 } else { 150.0 }
+        } else if vram_gb >= 24.0 {
+            1008.0 // GDDR6X on RTX 3090/4090
+        } else if vram_gb >= 8.0 {
+            504.0  // GDDR6 on RTX 3070/4060
+        } else {
+            64.0   // Dual-channel host DDR5
+        };
+
+        // 4. Formulate optimal execution strategy for 70B models
+        let (recommended_strategy, max_context) = if is_unified_memory {
+            // On Apple Silicon, RAM IS VRAM! Zero-copy GPU access without PCIe bus transfers
+            if host_ram_gb >= 64.0 {
+                ("Apple Silicon UMA: 70B 100% Resident in Unified RAM (Zero-PCIe Overhead, 800GB/s)".into(), 131072)
+            } else if host_ram_gb >= 36.0 {
+                ("Apple Silicon UMA: 70B Q4_K_M Zero-Copy Unified RAM + FP8 KV Cache".into(), 65536)
+            } else if host_ram_gb >= 16.0 {
+                ("Apple Silicon UMA: High-Bandwidth Layer Streaming (Zero-PCIe Bottleneck)".into(), 32768)
+            } else {
+                ("Apple Silicon UMA: Compact NF4 Dynamic Unified Paged Cache".into(), 16384)
+            }
+        } else if vram_gb >= 40.0 {
             ("Full VRAM Resident (Dense/MoE Zero-Offload)".into(), 131072)
         } else if vram_gb >= 24.0 {
             ("Hybrid Offload: 70B Q4 Resident + FP8 KV Cache".into(), 65536)
@@ -73,6 +99,8 @@ impl HardwareProfile {
             accelerator_name,
             accelerator_device,
             vram_gb,
+            is_unified_memory,
+            memory_bandwidth_gbps,
             recommended_70b_strategy: recommended_strategy,
             max_supported_context: max_context,
         }
