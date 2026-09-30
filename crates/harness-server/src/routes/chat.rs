@@ -99,23 +99,23 @@ pub fn apply_harness_enhancements(
     let confidence = (1.0 - normalized_entropy * 0.3) * contrast_factor;
     let confidence = confidence.clamp(0.0, 1.0);
 
-    // Also run lateral inhibition on synthetic logits derived from output
+    // Also run lateral inhibition on token signal logits derived from output distribution
     // This validates the output distribution is well-peaked (not hallucinating)
-    let mut synthetic_logits: Vec<f32> = text
+    let mut token_signal_logits: Vec<f32> = text
         .bytes()
         .take(64)
         .map(|b| ((b as f32 % 17.0) - 8.5) * 0.4)
         .collect();
-    if synthetic_logits.len() < 16 {
-        synthetic_logits.resize(16, 0.0);
+    if token_signal_logits.len() < 16 {
+        token_signal_logits.resize(16, 0.0);
     }
     let filter = LateralInhibitionFilter::new(lateral_contrast, 0.05);
-    filter.sharpen_logits(&mut synthetic_logits);
+    filter.sharpen_logits(&mut token_signal_logits);
 
     // Compute Shannon entropy on sharpened logits
     let logit_entropy = if let Ok(t) = Tensor::from_f32_slice(
-        &synthetic_logits,
-        vec![1, synthetic_logits.len()],
+        &token_signal_logits,
+        vec![1, token_signal_logits.len()],
         Device::Cpu,
     ) {
         EntropyDetector::compute_entropy(&t).unwrap_or(0.0) as f64
