@@ -1,6 +1,6 @@
 # 🚀 HARNESS: Frontier Pure-Rust LLM Inference Engine & Bio-SNN Platform
 
-[![Multi-Platform CI](https://github.com/infinity-techstack/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/infinity-techstack/harness/actions/workflows/ci.yml)
+[![Multi-Platform CI](https://github.com/ModernOps888/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernOps888/harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20(Metal)%20%7C%20Windows%20(CUDA%2FROCm)-blueviolet.svg)](#multi-os-hardware-auto-detection)
@@ -11,7 +11,7 @@
 
 ## 📸 Verified Platform Telemetry
 
-![HARNESS Platform Screenshot](<USERPROFILE>/.gemini/antigravity/brain/7bd8e42f-6846-4316-b639-5f4d3c84c5c7/harness_actual_platform_screenshot.png)
+![HARNESS Platform Screenshot](docs/screenshots/harness_platform.png)
 
 *Figure: Real-time telemetry dashboard running on `http://localhost:3000` executing complex distributed consensus architecture tasks at 154.2 tok/s, 38.4ms TTFT, with 74% LIF spiking sparsity and calibrated 98% factual confidence.*
 
@@ -106,7 +106,7 @@ To exploit HARNESS at its maximum capacity, use the **Unified Concurrent Archite
 ### Build and Run
 ```bash
 # 1. Clone repository
-git clone https://github.com/infinity-techstack/harness.git
+git clone https://github.com/ModernOps888/harness.git
 cd harness
 
 # 2. Run scientific verification test suite
