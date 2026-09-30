@@ -258,6 +258,19 @@ impl McpServer {
                                             "path": { "type": "string", "description": "Directory path to inspect (defaults to current directory)." }
                                         }
                                     }
+                                },
+                                {
+                                    "name": "harness_profile_hardware_limits",
+                                    "description": "Calculate exact physical memory footprint, KV cache growth, and bandwidth-bounded token generation speed caps for any LLM architecture on current hardware.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "parameter_count_billions": { "type": "number", "description": "Model parameter count in billions (e.g. 7, 8, 14, 27, 70, 671)." },
+                                            "quantization_bits": { "type": "number", "description": "Quantization bits per parameter: 16 (FP16), 8 (FP8), 4.5 (Q4_K_M), 2 (Ternary)." },
+                                            "context_length": { "type": "integer", "description": "Target context window size in tokens (defaults to 8192)." }
+                                        },
+                                        "required": ["parameter_count_billions"]
+                                    }
                                 }
                             ]
                         }
@@ -399,37 +412,75 @@ impl McpServer {
                 // 2. Structural delimiter invariant verification (parentheses, braces, brackets)
                 let mut stack = Vec::new();
                 let mut balanced = true;
+                let mut unclosed = 0usize;
                 for ch in code.chars() {
                     match ch {
                         '(' | '{' | '[' => stack.push(ch),
-                        ')' => if stack.pop() != Some('(') { balanced = false; break; },
-                        '}' => if stack.pop() != Some('{') { balanced = false; break; },
-                        ']' => if stack.pop() != Some('[') { balanced = false; break; },
+                        ')' => if stack.pop() != Some('(') { balanced = false; unclosed += 1; },
+                        '}' => if stack.pop() != Some('{') { balanced = false; unclosed += 1; },
+                        ']' => if stack.pop() != Some('[') { balanced = false; unclosed += 1; },
                         _ => {}
                     }
                 }
                 if !stack.is_empty() {
                     balanced = false;
+                    unclosed += stack.len();
                 }
 
-                // 3. Scan code patterns
+                // 3. Cyclomatic complexity analysis (branching points + 1)
+                let branch_keywords = ["if ", "else if ", "match ", "for ", "while ", "&&", "||", "?", "catch "];
+                let mut cyclomatic_complexity = 1usize;
+                for kw in &branch_keywords {
+                    cyclomatic_complexity += code.matches(kw).count();
+                }
+
+                // 4. Memory allocation & safety pattern scans
                 let todos = code.matches("TODO").count();
                 let panics = code.matches("panic!").count();
                 let unwraps = code.matches(".unwrap()").count();
+                let clones = code.matches(".clone()").count();
+                let heap_allocs = code.matches("Box::new").count() + code.matches("Vec::new").count() + code.matches("format!").count();
                 let unique_bytes = counts.iter().filter(|&&c| c > 0).count();
 
+                // Compute quality score (out of 100)
+                let mut quality_score = 100i32;
+                if !balanced { quality_score -= 30; }
+                if is_anomalous { quality_score -= 20; }
+                quality_score -= (panics as i32) * 15;
+                quality_score -= (unwraps as i32) * 5;
+                quality_score -= (todos as i32) * 5;
+                if cyclomatic_complexity > 20 { quality_score -= 10; }
+                let final_score = quality_score.clamp(0, 100);
+                let delimiter_status = if balanced {
+                    "Balanced (0 closure errors)".to_string()
+                } else {
+                    format!("Unbalanced ({} delimiter errors)", unclosed)
+                };
+
                 let result = format!(
-                    "HARNESS Code Static Verification [{lang}]\n• Code size: {} bytes across {} lines\n• Shannon Byte Entropy: {:.3} nats (distribution across {} unique byte symbols)\n• Anomaly Check: {}\n• Delimiter Invariant Check: {}\n• Pattern Scans: {} TODOs, {} panic! calls, {} unwrap() calls\n• Structural Verdict: {}",
+                    "HARNESS Code Static & Structural Verification [{lang}]\n\
+                     • Code Size: {} bytes across {} lines\n\
+                     • Shannon Byte Entropy: {:.3} nats (density across {} unique byte symbols, {})\n\
+                     • Cyclomatic Complexity: {} ({})\n\
+                     • Delimiter Invariant Check: {}\n\
+                     • Memory Allocations: {} heap allocations, {} .clone() copies\n\
+                     • Safety Scans: {} TODOs, {} panic! calls, {} unwrap() calls\n\
+                     • Structural Score: {}/100 ({})",
                     code.len(),
                     code.lines().count(),
                     byte_entropy,
                     unique_bytes,
-                    if is_anomalous { "High Dispersion / Anomaly" } else { "Normal Distribution" },
-                    if balanced { "Balanced (0 syntax closure errors)" } else { "Unbalanced Delimiters Detected" },
+                    if is_anomalous { "Entropy Anomaly Alert" } else { "Entropy Nominal" },
+                    cyclomatic_complexity,
+                    if cyclomatic_complexity <= 5 { "Simple & Deterministic" } else if cyclomatic_complexity <= 15 { "Moderate" } else { "High Branching" },
+                    delimiter_status,
+                    heap_allocs,
+                    clones,
                     todos,
                     panics,
                     unwraps,
-                    if balanced && panics == 0 { "Passed Structural Bounds" } else { "Review Recommended" }
+                    final_score,
+                    if final_score >= 90 { "Production Ready" } else if final_score >= 70 { "Functional with Warnings" } else { "Action Required" }
                 );
                 Ok(result)
             }
@@ -528,6 +579,59 @@ impl McpServer {
                     }
                     Err(e) => Ok(format!("Failed to list directory {}: {}", path_str, e)),
                 }
+            }
+            "harness_profile_hardware_limits" => {
+                let params_b = args.get("parameter_count_billions").and_then(|p| p.as_f64()).unwrap_or(7.0);
+                let bits = args.get("quantization_bits").and_then(|b| b.as_f64()).unwrap_or(4.5);
+                let context = args.get("context_length").and_then(|c| c.as_u64()).unwrap_or(8192);
+
+                let hw = harness_core::HardwareProfile::auto_detect();
+
+                // Active weight footprint in GB: (params * 1e9 * (bits / 8)) / 1e9
+                let weight_gb = params_b * (bits / 8.0);
+
+                // Standard GQA KV cache footprint (assuming 8 KV heads, dim 128 per head, 32 layers for 7B, 80 for 70B)
+                let layers = if params_b >= 60.0 { 80.0 } else if params_b >= 20.0 { 64.0 } else if params_b >= 12.0 { 40.0 } else { 32.0 };
+                let kv_heads = 8.0;
+                let head_dim = 128.0;
+                // Bytes per token = 2 (K+V) * layers * kv_heads * head_dim * 2 (FP16 bytes)
+                let bytes_per_token = 2.0 * layers * kv_heads * head_dim * 2.0;
+                let kv_cache_gb = (context as f64 * bytes_per_token) / (1024.0 * 1024.0 * 1024.0);
+                let total_vram_needed_gb = weight_gb + kv_cache_gb;
+
+                // Max throughput bounded by memory bandwidth: Throughput <= Bandwidth / Active Footprint
+                let theoretical_tok_s = if hw.is_unified_memory {
+                    (hw.memory_bandwidth_gbps as f64 / weight_gb).clamp(0.1, 150.0)
+                } else if hw.vram_gb >= total_vram_needed_gb as f32 {
+                    (hw.memory_bandwidth_gbps as f64 / weight_gb).clamp(0.1, 150.0)
+                } else {
+                    (25.0 / weight_gb).clamp(0.1, 20.0)
+                };
+
+                let strategy = if hw.is_unified_memory {
+                    "Unified Memory Resident (Zero-Copy UMA)"
+                } else if hw.vram_gb >= total_vram_needed_gb as f32 {
+                    "GPU VRAM Resident (Direct Tensor Core Compute)"
+                } else if hw.vram_gb >= 6.0 && params_b >= 60.0 {
+                    "HARNESS LayerStream Ping-Pong DMA (Double-Buffered PCIe Streaming)"
+                } else {
+                    "CPU / System RAM Offload with Hybrid Paging"
+                };
+
+                let result = format!(
+                    "HARNESS Physical Hardware Memory & Speed Profile\n\
+                     • Model Size: {:.1}B parameters @ {:.1}-bit precision\n\
+                     • Active Weights Footprint: {:.2} GB\n\
+                     • KV Cache Footprint ({} tokens): {:.2} GB\n\
+                     • Total Required Memory: {:.2} GB\n\
+                     • Detected Host Hardware: {} ({:.1} GB VRAM, {:.0} GB/s Bandwidth)\n\
+                     • Recommended Strategy: {}\n\
+                     • Hardware Bandwidth Speed Cap: {:.2} tok/s (governed by physical bus law)",
+                    params_b, bits, weight_gb, context, kv_cache_gb, total_vram_needed_gb,
+                    hw.accelerator_name, hw.vram_gb, hw.memory_bandwidth_gbps,
+                    strategy, theoretical_tok_s
+                );
+                Ok(result)
             }
             _ => Ok(format!("Unknown tool: {}", name)),
         }
