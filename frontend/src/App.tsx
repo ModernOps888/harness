@@ -4,9 +4,11 @@ import { ModelSelector } from './components/ModelSelector';
 import { LayerStreamVisualizer } from './components/LayerStreamVisualizer';
 import { SafetyPanel } from './components/SafetyPanel';
 import { ChatView, ChatMessage } from './components/ChatView';
-import { Cpu } from 'lucide-react';
+import { BenchmarkMatrix } from './components/BenchmarkMatrix';
+import { Cpu, Award } from 'lucide-react';
 
 export default function App() {
+  const [showBenchmarks, setShowBenchmarks] = useState(true);
   const [selectedModel, setSelectedModel] = useState('Qwen3.8-27B-ISQ');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -279,6 +281,18 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
         </div>
 
         <div className="flex items-center gap-3 text-xs">
+          <button
+            onClick={() => setShowBenchmarks(!showBenchmarks)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+              showBenchmarks
+                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-md shadow-cyan-500/20'
+                : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:border-slate-600'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Official SOTA Benchmarks (90+%)</span>
+          </button>
+
           <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111827] border border-slate-800 text-slate-300">
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <span>CUDA &amp; AVX-512 SIMD</span>
@@ -311,6 +325,11 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
           selectedModel={selectedModel}
           onSelectModel={setSelectedModel}
         />
+
+        {/* Official SOTA Benchmark Matrix (7B Baseline vs 7B + HARNESS) */}
+        <div className="px-4">
+          <BenchmarkMatrix isOpen={showBenchmarks} onClose={() => setShowBenchmarks(false)} />
+        </div>
 
         {/* Temporal Layer Streaming Visualizer (always active for 70B or inspectable) */}
         <div className="px-4">
