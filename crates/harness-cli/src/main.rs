@@ -11,7 +11,7 @@ use std::time::Instant;
 
 #[derive(Parser)]
 #[command(name = "harness")]
-#[command(about = "HARNESS — World-Class High-Performance Pure-Rust LLM Inference Engine", long_about = None)]
+#[command(about = "HARNESS: World-Class High-Performance Pure-Rust LLM Inference Engine", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Serve { port, model } => {
             println!("{}", "══════════════════════════════════════════════════════════════════".cyan());
-            println!("{}", "  🚀 HARNESS PURE-RUST LLM INFERENCE ENGINE — SERVER MODE".bold().cyan());
+            println!("{}", "  🚀 HARNESS PURE-RUST LLM INFERENCE ENGINE: SERVER MODE".bold().cyan());
             println!("{}", "══════════════════════════════════════════════════════════════════".cyan());
             println!("  Model: {}", model.green());
             println!("  Port:  {}", port.to_string().yellow());
@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Bench { tokens, batch_size } => {
             println!("{}", "══════════════════════════════════════════════════════════════════".magenta());
-            println!("{}", "  ⚡ HARNESS BENCHMARK SUITE — SOTA THROUGHPUT EVALUATION".bold().magenta());
+            println!("{}", "  ⚡ HARNESS BENCHMARK SUITE: SOTA THROUGHPUT EVALUATION".bold().magenta());
             println!("{}", "══════════════════════════════════════════════════════════════════".magenta());
             println!("  Batch Size:    {}", batch_size.to_string().yellow());
             println!("  Target Tokens: {}", tokens.to_string().yellow());
@@ -268,7 +268,7 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Verify => {
             println!("{}", "══════════════════════════════════════════════════════════════════".bright_cyan());
-            println!("{}", "  🔬 HARNESS SCIENTIFIC VERIFICATION SUITE — 10 CRATES & BIO-AI".bold().bright_cyan());
+            println!("{}", "  🔬 HARNESS SCIENTIFIC VERIFICATION SUITE: 10 CRATES & BIO-AI".bold().bright_cyan());
             println!("{}", "══════════════════════════════════════════════════════════════════".bright_cyan());
             println!("  Roles Active: Security Expert, DevOps, ML Expert, AI Principal\n");
 

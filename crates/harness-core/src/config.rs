@@ -2,8 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelArchitecture {
+    Llama3,
     Llama4,
+    Qwen2_5,
     Qwen3,
+    DeepSeekV3,
     DeepSeekV4,
     Phi4,
     Gemma3,
@@ -107,6 +110,109 @@ impl ModelConfig {
                 norm_topk_prob: true,
             }),
             quantization: QuantizationMode::FP8,
+        }
+    }
+
+    /// Configuration for Llama 3.3 70B Instruct
+    pub fn llama3_3_70b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Llama3,
+            vocab_size: 128256,
+            hidden_size: 8192,
+            intermediate_size: 28672,
+            num_hidden_layers: 80,
+            num_attention_heads: 64,
+            num_key_value_heads: 8,
+            max_position_embeddings: 131072,
+            rms_norm_eps: 1e-5,
+            rope_theta: 500000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Configuration for Qwen 2.5 72B Instruct
+    pub fn qwen2_5_72b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Qwen2_5,
+            vocab_size: 152064,
+            hidden_size: 8192,
+            intermediate_size: 29568,
+            num_hidden_layers: 80,
+            num_attention_heads: 64,
+            num_key_value_heads: 8,
+            max_position_embeddings: 131072,
+            rms_norm_eps: 1e-6,
+            rope_theta: 1000000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Configuration for DeepSeek-R1 / V3 Sparse MoE (671B Total, 37B Active)
+    /// Ideal for 128GB+ Mac Unified Memory or multi-GPU sparse offloading
+    pub fn deepseek_r1_671b() -> Self {
+        Self {
+            architecture: ModelArchitecture::DeepSeekV3,
+            vocab_size: 129280,
+            hidden_size: 7168,
+            intermediate_size: 18432,
+            num_hidden_layers: 61,
+            num_attention_heads: 128,
+            num_key_value_heads: 128,
+            max_position_embeddings: 163840,
+            rms_norm_eps: 1e-6,
+            rope_theta: 10000.0,
+            moe: Some(MoEConfig {
+                num_routed_experts: 256,
+                num_shared_experts: 1,
+                num_active_experts: 8,
+                routing_top_k: 8,
+                norm_topk_prob: true,
+            }),
+            quantization: QuantizationMode::FP8,
+        }
+    }
+
+    /// Configuration for Mixtral 8x22B Sparse MoE (141B Total, 39B Active)
+    pub fn mixtral_8x22b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Mistral,
+            vocab_size: 32768,
+            hidden_size: 6144,
+            intermediate_size: 16384,
+            num_hidden_layers: 56,
+            num_attention_heads: 48,
+            num_key_value_heads: 8,
+            max_position_embeddings: 65536,
+            rms_norm_eps: 1e-5,
+            rope_theta: 1000000.0,
+            moe: Some(MoEConfig {
+                num_routed_experts: 8,
+                num_shared_experts: 0,
+                num_active_experts: 2,
+                routing_top_k: 2,
+                norm_topk_prob: false,
+            }),
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Configuration for Phi-4 14B High-Reasoning System-1
+    pub fn phi4_14b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Phi4,
+            vocab_size: 100352,
+            hidden_size: 5120,
+            intermediate_size: 17920,
+            num_hidden_layers: 40,
+            num_attention_heads: 40,
+            num_key_value_heads: 10,
+            max_position_embeddings: 16384,
+            rms_norm_eps: 1e-5,
+            rope_theta: 250000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
         }
     }
 }

@@ -1,5 +1,5 @@
-use harness_attention::PagedAttentionManager;
-use harness_core::{Device, DeviceManager, ModelConfig};
+use harness_attention::{PagedAttentionManager, RadixPrefixCache};
+use harness_core::{DeviceManager, ModelConfig};
 use harness_pipeline::{BatchedInferenceEngine, SpeculativeDecoder};
 use harness_rag::VectorStore;
 use harness_safety::ConfidenceScorer;
@@ -13,6 +13,7 @@ pub struct AppState {
     pub model_config: Arc<RwLock<ModelConfig>>,
     pub device_mgr: Arc<DeviceManager>,
     pub paged_attn: Arc<Mutex<PagedAttentionManager>>,
+    pub prefix_cache: Arc<Mutex<RadixPrefixCache>>,
     pub batcher: Arc<Mutex<BatchedInferenceEngine>>,
     pub speculative: Arc<Mutex<SpeculativeDecoder>>,
     pub confidence_scorer: Arc<ConfidenceScorer>,
@@ -26,6 +27,7 @@ impl AppState {
         let device_mgr = Arc::new(DeviceManager::detect_primary());
         // 1024 blocks of 16 tokens = 16,384 tokens KV cache pool
         let paged_attn = Arc::new(Mutex::new(PagedAttentionManager::new(16, 1024)));
+        let prefix_cache = Arc::new(Mutex::new(RadixPrefixCache::new()));
         let batcher = Arc::new(Mutex::new(BatchedInferenceEngine::new(64)));
         let speculative = Arc::new(Mutex::new(SpeculativeDecoder::new(4)));
         let confidence_scorer = Arc::new(ConfidenceScorer::new(0.85));
@@ -36,6 +38,7 @@ impl AppState {
             model_config: Arc::new(RwLock::new(ModelConfig::qwen3_27b())),
             device_mgr,
             paged_attn,
+            prefix_cache,
             batcher,
             speculative,
             confidence_scorer,
