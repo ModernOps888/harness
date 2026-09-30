@@ -99,15 +99,14 @@ pub fn apply_harness_enhancements(
     let confidence = (1.0 - normalized_entropy * 0.3) * contrast_factor;
     let confidence = confidence.clamp(0.0, 1.0);
 
-    // Also run lateral inhibition on token signal logits derived from output distribution
-    // This validates the output distribution is well-peaked (not hallucinating)
-    let mut token_signal_logits: Vec<f32> = text
-        .bytes()
+    // Run lateral inhibition on empirical token frequency log-probabilities
+    let mut token_signal_logits: Vec<f32> = byte_freq.iter()
+        .filter(|&&c| c > 0)
         .take(64)
-        .map(|b| ((b as f32 % 17.0) - 8.5) * 0.4)
+        .map(|&c| (c as f32 / total as f32).ln())
         .collect();
     if token_signal_logits.len() < 16 {
-        token_signal_logits.resize(16, 0.0);
+        token_signal_logits.resize(16, -10.0);
     }
     let filter = LateralInhibitionFilter::new(lateral_contrast, 0.05);
     filter.sharpen_logits(&mut token_signal_logits);
@@ -123,8 +122,8 @@ pub fn apply_harness_enhancements(
         0.0
     };
 
-    // Blend byte entropy and logit entropy for final confidence
-    let final_confidence = (confidence * 0.7 + (1.0 - logit_entropy * 0.1) * 0.3).clamp(0.5, 0.99);
+    // Calculate final confidence from empirical entropy measurements
+    let final_confidence = (confidence * 0.7 + (1.0 - logit_entropy * 0.1) * 0.3).clamp(0.1, 1.0);
 
     (final_confidence, normalized_entropy)
 }
