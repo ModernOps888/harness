@@ -1,0 +1,14 @@
+[package]
+name = "harness-models"
+version = "0.1.0"
+edition = "2021"
+description = "Model architecture implementations (Llama 4, Qwen 3, DeepSeek V4 MoE, Phi-4) for HARNESS"
+
+[dependencies]
+harness-core = { workspace = true }
+harness-loader = { workspace = true }
+harness-quant = { workspace = true }
+harness-attention = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+rayon = { workspace = true }

@@ -1,0 +1,13 @@
+[package]
+name = "harness-attention"
+version = "0.1.0"
+edition = "2021"
+description = "FlashAttention v3, PagedAttention block manager, and Radix Prefix Caching for HARNESS"
+
+[dependencies]
+harness-core = { workspace = true }
+harness-quant = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+rayon = { workspace = true }
+uuid = { workspace = true }

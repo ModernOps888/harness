@@ -1,0 +1,25 @@
+[package]
+name = "harness-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Command line interface for HARNESS LLM Engine (chat, serve, bench, tune, 70b-streaming)"
+
+[dependencies]
+harness-core = { workspace = true }
+harness-loader = { workspace = true }
+harness-quant = { workspace = true }
+harness-attention = { workspace = true }
+harness-models = { workspace = true }
+harness-pipeline = { workspace = true }
+harness-safety = { workspace = true }
+harness-rag = { workspace = true }
+harness-server = { workspace = true }
+harness-mcp = { workspace = true }
+axum = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+colored = "2.1"

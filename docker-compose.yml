@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  harness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: infinitytechstack/harness:latest
+    container_name: harness-engine
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+      - HARNESS_PORT=8080
+      - HARNESS_VRAM_LIMIT_GB=8
+      - HARNESS_SPARSE_LIF_THRESHOLD=0.35
+      - HARNESS_LATERAL_CONTRAST=1.8
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
