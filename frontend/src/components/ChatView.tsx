@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Square, Bot, User, ShieldCheck, Zap, Copy, Check } from 'lucide-react';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 export interface ChatMessage {
   id: string;
@@ -126,13 +127,17 @@ export const ChatView: React.FC<Props> = ({
                   </div>
 
                   <div
-                    className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
+                    className={`p-4 rounded-2xl text-sm leading-relaxed ${
                       isUser
                         ? 'bg-blue-600/10 border border-blue-500/20 text-blue-100 rounded-tr-sm'
-                        : 'bg-[#111726] border border-slate-800 text-slate-200 rounded-tl-sm'
+                        : 'bg-[#0f1524] border border-slate-800 text-slate-200 rounded-tl-sm shadow-lg'
                     }`}
                   >
-                    <div className="whitespace-pre-wrap">{msg.content}</div>
+                    {isUser ? (
+                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                    ) : (
+                      <MarkdownRenderer content={msg.content} />
+                    )}
                   </div>
                 </div>
               </div>

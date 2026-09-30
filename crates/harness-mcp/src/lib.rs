@@ -134,6 +134,39 @@ impl McpServer {
                                         "type": "object",
                                         "properties": {}
                                     }
+                                },
+                                {
+                                    "name": "harness_create_file",
+                                    "description": "Create or update a source code file with automatic directory creation across all programming languages.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "path": { "type": "string", "description": "Relative or absolute file path to create." },
+                                            "content": { "type": "string", "description": "Complete source code content." }
+                                        },
+                                        "required": ["path", "content"]
+                                    }
+                                },
+                                {
+                                    "name": "harness_read_file",
+                                    "description": "Read file contents from the workspace for factual grounding and context analysis.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "path": { "type": "string", "description": "Path of the file to read." }
+                                        },
+                                        "required": ["path"]
+                                    }
+                                },
+                                {
+                                    "name": "harness_list_directory",
+                                    "description": "Inspect and list workspace directory contents and file hierarchies.",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "path": { "type": "string", "description": "Directory path to inspect (defaults to current directory)." }
+                                        }
+                                    }
                                 }
                             ]
                         }
@@ -272,6 +305,50 @@ impl McpServer {
                     snap.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
                     snap.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
                 ))
+            }
+            "harness_create_file" => {
+                let path_str = args.get("path").and_then(|p| p.as_str()).unwrap_or("");
+                let content = args.get("content").and_then(|c| c.as_str()).unwrap_or("");
+                if path_str.is_empty() {
+                    return Ok("Error: File path cannot be empty".into());
+                }
+                let p = std::path::Path::new(path_str);
+                if let Some(parent) = p.parent() {
+                    if !parent.as_os_str().is_empty() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                }
+                match std::fs::write(p, content) {
+                    Ok(_) => Ok(format!("File created successfully: {} ({} bytes written)", path_str, content.len())),
+                    Err(e) => Ok(format!("Failed to create file {}: {}", path_str, e)),
+                }
+            }
+            "harness_read_file" => {
+                let path_str = args.get("path").and_then(|p| p.as_str()).unwrap_or("");
+                if path_str.is_empty() {
+                    return Ok("Error: File path cannot be empty".into());
+                }
+                match std::fs::read_to_string(path_str) {
+                    Ok(c) => Ok(format!("File contents for {} ({} lines, {} bytes):\n{}", path_str, c.lines().count(), c.len(), c)),
+                    Err(e) => Ok(format!("Failed to read file {}: {}", path_str, e)),
+                }
+            }
+            "harness_list_directory" => {
+                let path_str = args.get("path").and_then(|p| p.as_str()).unwrap_or(".");
+                match std::fs::read_dir(path_str) {
+                    Ok(entries) => {
+                        let mut items = Vec::new();
+                        for entry in entries.flatten() {
+                            let file_name = entry.file_name().to_string_lossy().to_string();
+                            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                            let tag = if is_dir { "[DIR]" } else { "[FILE]" };
+                            items.push(format!("{} {}", tag, file_name));
+                        }
+                        items.sort();
+                        Ok(format!("Directory listing for {}:\n{}", path_str, items.join("\n")))
+                    }
+                    Err(e) => Ok(format!("Failed to list directory {}: {}", path_str, e)),
+                }
             }
             _ => Ok(format!("Unknown tool: {}", name)),
         }
