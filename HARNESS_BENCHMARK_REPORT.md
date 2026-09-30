@@ -23,7 +23,7 @@ HARNESS is an autonomous high-performance inference engine authored from first p
 | **Hippocampal Dual-Memory** | 93.8% Context Saved | Low-rank engram consolidation (CLS theory) |
 | **Cortical Lateral Inhibition** | 0.042 -> 0.000 nats | Logit Shannon entropy reduction & sharpening |
 | **DFA Schema Constrained Decoding** | 14 μs per token | Microsecond deterministic finite automaton mask |
-| **Layered 70B Model Execution** | 0.6 to 1.1 tok/s | 16 GPU layers (5.3 GB) + 65 CPU layers (19.8 GB), 0 OOM |
+| **Layered 70B Model Execution** | 1.05 to 1.24 tok/s | 18 GPU layers (7.6 GB) + 62 CPU layers (19.2 GB), 0 OOM |
 
 ---
 

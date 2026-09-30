@@ -110,7 +110,7 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
   const [confidenceScore, setConfidenceScore] = useState(0.98);
 
   // Bio-Evolutionary & Safety State
-  const [spikingSparsity, setSpikingSparsity] = useState(0.74);
+  const [spikingSparsity, setSpikingSparsity] = useState(0.0);
   const [spikingThreshold, setSpikingThreshold] = useState(0.35);
   const [lateralContrast, setLateralContrast] = useState(1.8);
   const [stigmergyEnabled, setStigmergyEnabled] = useState(true);

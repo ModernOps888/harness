@@ -36,7 +36,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             quantization: format!("{:?}", config.quantization),
             context_length: config.max_position_embeddings,
             hardware_tier: "Tier-2: 16GB GPU / 32GB RAM resident".into(),
-            sparse_routing: "LIF Spiking Sparsity (74% FLOP reduction)".into(),
+            sparse_routing: "LIF Spiking Sparsity (adaptive thresholding)".into(),
         },
         ModelCard {
             id: "Llama-3.3-70B-LayerStream".into(),
@@ -90,7 +90,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             architecture: "Phi4".into(),
             quantization: "Q4_K_M".into(),
             context_length: 16384,
-            hardware_tier: "Tier-1: 8GB GPU / 16GB Mac UMA fully resident (200+ tok/s)".into(),
+            hardware_tier: "Tier-1: 8GB GPU / 16GB Mac UMA fully resident".into(),
             sparse_routing: "Dense System-1 fast intuitive inference".into(),
         },
     ];
