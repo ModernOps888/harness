@@ -389,12 +389,14 @@ impl McpServer {
                 }
             }
             "harness_engine_status" => {
+                let hw = harness_core::HardwareProfile::auto_detect();
                 let dev_mgr = DeviceManager::new(Device::Cpu, 16 * 1024 * 1024 * 1024);
                 let snap = dev_mgr.snapshot();
                 Ok(format!(
-                    "HARNESS Engine Status:\n• Core: Pure-Rust SIMD + Rayon + CUDA\n• Active Throughput: 154.2 tok/s\n• TTFT: 38.4 ms\n• VRAM Overhead: {:.1} GB / {:.1} GB\n• Paged KV Cache: 0.0% fragmentation\n• Speculative Acceptance: 76.4%\n• SNN Spiking Sparsity: 74.0%\n• Layer Streaming: 70B on 8GB VRAM ready",
+                    "HARNESS Engine Status:\n• Core: Pure-Rust SIMD + Rayon + CUDA\n• Host OS/Arch: {} {}\n• Active Compute: {}\n• Memory Bandwidth: {:.0} GB/s\n• Host Buffer: {:.1} GB allocated\n• Device VRAM: {:.1} GB\n• Paged KV Cache: Dynamic block pool active\n• Layer Streaming: Hybrid CPU/GPU ready",
+                    hw.os, hw.arch, hw.accelerator_name, hw.memory_bandwidth_gbps,
                     snap.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
-                    snap.total_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+                    hw.vram_gb
                 ))
             }
             "harness_create_file" => {

@@ -170,6 +170,8 @@ pub struct OllamaChatResponse {
     pub total_duration: Option<u64>,
     pub eval_count: Option<u64>,
     pub eval_duration: Option<u64>,
+    pub prompt_eval_count: Option<u64>,
+    pub prompt_eval_duration: Option<u64>,
 }
 
 // ---- OpenAI-compatible request/response types ----
@@ -347,14 +349,23 @@ impl BackendProxy {
                     .map(|m| m.content)
                     .unwrap_or_default();
 
+                let prompt_eval_dur = ollama_resp.prompt_eval_duration.unwrap_or(0);
+                let ttft_ms = if prompt_eval_dur > 0 {
+                    prompt_eval_dur as f64 / 1_000_000.0
+                } else {
+                    0.0
+                };
                 let metrics = BackendMetrics {
                     eval_tokens: ollama_resp.eval_count.unwrap_or(0),
                     eval_duration_ns: ollama_resp.eval_duration.unwrap_or(0),
+                    prompt_eval_tokens: ollama_resp.prompt_eval_count.unwrap_or(0),
+                    prompt_eval_duration_ns: prompt_eval_dur,
                     tok_per_sec: if let (Some(count), Some(dur)) = (ollama_resp.eval_count, ollama_resp.eval_duration) {
                         if dur > 0 { (count as f64 / dur as f64) * 1_000_000_000.0 } else { 0.0 }
                     } else {
                         0.0
                     },
+                    ttft_ms,
                 };
 
                 Ok((content, metrics))
@@ -394,7 +405,10 @@ impl BackendProxy {
                 let metrics = BackendMetrics {
                     eval_tokens: json_resp["usage"]["completion_tokens"].as_u64().unwrap_or(0),
                     eval_duration_ns: 0,
+                    prompt_eval_tokens: json_resp["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
+                    prompt_eval_duration_ns: 0,
                     tok_per_sec: 0.0,
+                    ttft_ms: 0.0,
                 };
 
                 Ok((content, metrics))
@@ -594,7 +608,10 @@ pub struct StreamChunk {
 pub struct BackendMetrics {
     pub eval_tokens: u64,
     pub eval_duration_ns: u64,
+    pub prompt_eval_tokens: u64,
+    pub prompt_eval_duration_ns: u64,
     pub tok_per_sec: f64,
+    pub ttft_ms: f64,
 }
 
 #[derive(Debug, Clone)]
