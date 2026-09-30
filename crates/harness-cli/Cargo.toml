@@ -22,4 +22,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
+chrono = { workspace = true }
 colored = "2.1"
