@@ -31,7 +31,7 @@ impl Default for BackendConfig {
         Self {
             base_url: "http://localhost:11434".to_string(),
             backend_type: BackendType::Ollama,
-            timeout_secs: 120,
+            timeout_secs: 600,
             api_key: None,
         }
     }
@@ -51,7 +51,7 @@ impl BackendConfig {
                 return Self {
                     base_url: "http://localhost:11434".to_string(),
                     backend_type: BackendType::Ollama,
-                    timeout_secs: 120,
+                    timeout_secs: 600,
                     api_key: None,
                 };
             }
@@ -63,7 +63,7 @@ impl BackendConfig {
                 return Self {
                     base_url: "http://localhost:1234".to_string(),
                     backend_type: BackendType::OpenAICompatible,
-                    timeout_secs: 120,
+                    timeout_secs: 600,
                     api_key: None,
                 };
             }
@@ -75,7 +75,7 @@ impl BackendConfig {
                 return Self {
                     base_url: "http://localhost:8000".to_string(),
                     backend_type: BackendType::OpenAICompatible,
-                    timeout_secs: 120,
+                    timeout_secs: 600,
                     api_key: None,
                 };
             }
@@ -263,6 +263,11 @@ impl BackendProxy {
         }
 
         // 2. Keyword matching
+        if req_clean.contains("70b") || req_clean.contains("72b") || req_clean.contains("scout") {
+            if let Some(m70) = available.iter().find(|m| m.contains("70b") || m.contains("72b")) {
+                return m70.clone();
+            }
+        }
         if req_clean.contains("coder") || req_clean.contains("code") {
             if let Some(coder) = available.iter().find(|m| m.contains("coder")) {
                 return coder.clone();
