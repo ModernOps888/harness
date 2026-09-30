@@ -241,7 +241,7 @@ async fn main() -> anyhow::Result<()> {
                     tokens_to_gen,
                     word.chars().take(12).collect::<String>(),
                     slot,
-                    format!("{} (L{:02})", (slot + 1) % 2, prefetch.unwrap_or(0)),
+                    format!("{} (L{:02})", (slot + 1) % 2, prefetch.unwrap_or(0usize)),
                     sparsity_pct
                 );
             }
