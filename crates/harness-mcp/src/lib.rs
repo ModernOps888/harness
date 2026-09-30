@@ -58,7 +58,8 @@ impl McpServer {
                         "result": {
                             "protocolVersion": "2024-11-05",
                             "capabilities": {
-                                "tools": {}
+                                "tools": {},
+                                "prompts": {}
                             },
                             "serverInfo": {
                                 "name": "harness-mcp",
@@ -71,6 +72,90 @@ impl McpServer {
                 }
                 "notifications/initialized" => {
                     // Client notification, no response required
+                }
+                "prompts/list" => {
+                    let resp = json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {
+                            "prompts": [
+                                {
+                                    "name": "system_1_coding",
+                                    "description": "High-speed direct coding with zero heap contention, strict invariants, and PagedAttention KV caching.",
+                                    "arguments": [
+                                        { "name": "task", "description": "The coding task or module to author", "required": true }
+                                    ]
+                                },
+                                {
+                                    "name": "deep_reasoning_audit",
+                                    "description": "Mathematical and invariant audit verifying dimensional consistency and Shannon entropy bounds.",
+                                    "arguments": [
+                                        { "name": "problem", "description": "The logic or mathematical problem to audit", "required": true }
+                                    ]
+                                },
+                                {
+                                    "name": "scaffold_rust_crate",
+                                    "description": "Author an idiomatic, panic-free Rust crate architecture with zero python dependencies.",
+                                    "arguments": [
+                                        { "name": "crate_name", "description": "Name and purpose of the crate", "required": true }
+                                    ]
+                                }
+                            ]
+                        }
+                    });
+                    writeln!(stdout, "{}", resp)?;
+                    stdout.flush()?;
+                }
+                "prompts/get" => {
+                    let prompt_name = req.get("params")
+                        .and_then(|p| p.get("name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or("");
+                    let prompt_args = req.get("params")
+                        .and_then(|p| p.get("arguments"))
+                        .cloned()
+                        .unwrap_or(json!({}));
+
+                    let user_task = prompt_args.get("task")
+                        .or_else(|| prompt_args.get("problem"))
+                        .or_else(|| prompt_args.get("crate_name"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Execute code implementation with strict memory bounds");
+
+                    let prompt_message = match prompt_name {
+                        "system_1_coding" => format!(
+                            "You are an elite high-throughput systems engineer. Implement the following task in pure, idiomatic code with zero heap allocation in critical loops and verified formal safety invariants:\n\n{}",
+                            user_task
+                        ),
+                        "deep_reasoning_audit" => format!(
+                            "Conduct a mathematical step-by-step invariant audit of the following problem. Check dimensional homogeneity, verify state transitions, and enforce zero entropy dispersion:\n\n{}",
+                            user_task
+                        ),
+                        "scaffold_rust_crate" => format!(
+                            "Scaffold a complete, panic-free Rust crate for: {}\nEnsure pure-Rust implementation, zero Python runtime, modular abstractions, and comprehensive unit tests.",
+                            user_task
+                        ),
+                        _ => user_task.to_string(),
+                    };
+
+                    let resp = json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "result": {
+                            "description": format!("Template: {}", prompt_name),
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": {
+                                        "type": "text",
+                                        "text": prompt_message
+                                    }
+                                }
+                            ]
+                        }
+                    });
+                    writeln!(stdout, "{}", resp)?;
+                    stdout.flush()?;
                 }
                 "tools/list" => {
                     let resp = json!({

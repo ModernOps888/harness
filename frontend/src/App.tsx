@@ -1,14 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
-import { MetricsBar } from './components/MetricsBar';
+import { MetricsBar, HardwareProfile } from './components/MetricsBar';
 import { ModelSelector } from './components/ModelSelector';
 import { LayerStreamVisualizer } from './components/LayerStreamVisualizer';
 import { SafetyPanel } from './components/SafetyPanel';
 import { ChatView, ChatMessage } from './components/ChatView';
 import { BenchmarkMatrix } from './components/BenchmarkMatrix';
-import { Cpu, Award } from 'lucide-react';
+import { ReportModal } from './components/ReportModal';
+import { HardwareModal } from './components/HardwareModal';
+import { Cpu, Award, FileText, Activity } from 'lucide-react';
 
 export default function App() {
   const [showBenchmarks, setShowBenchmarks] = useState(true);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showHardwareModal, setShowHardwareModal] = useState(false);
+  const [hardware, setHardware] = useState<HardwareProfile | null>(null);
   const [selectedModel, setSelectedModel] = useState('Qwen3.8-27B-ISQ');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -133,6 +138,9 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
           setConfidenceScore(0.98);
           if (data.lif_spiking_sparsity) {
             setSpikingSparsity(data.lif_spiking_sparsity);
+          }
+          if (data.hardware) {
+            setHardware(data.hardware);
           }
         }
       } catch (e) {
@@ -280,7 +288,7 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 text-xs">
+        <div className="flex items-center gap-2.5 text-xs">
           <button
             onClick={() => setShowBenchmarks(!showBenchmarks)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
@@ -290,13 +298,24 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
             }`}
           >
             <Award className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Official SOTA Benchmarks (90+%)</span>
+            <span>SOTA Benchmarks</span>
           </button>
 
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111827] border border-slate-800 text-slate-300">
-            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-            <span>CUDA &amp; AVX-512 SIMD</span>
-          </div>
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/40 text-xs font-semibold transition-all shadow-md shadow-emerald-950/20"
+          >
+            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Benchmark Report</span>
+          </button>
+
+          <button
+            onClick={() => setShowHardwareModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-900/40 text-xs font-semibold transition-all shadow-md shadow-indigo-950/20"
+          >
+            <Activity className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Hardware Physics</span>
+          </button>
 
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-emerald-400 font-medium font-mono text-[11px]">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -316,6 +335,7 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
         confidenceScore={confidenceScore}
         isStreaming={isStreaming}
         spikingSparsity={spikingSparsity}
+        hardware={hardware}
       />
 
       {/* Main Workspace Layout */}
@@ -371,6 +391,19 @@ impl<T: Copy + Send + 'static> RaftActor<T> {
           </div>
         </div>
       </div>
+
+      {/* Live Benchmark Report Modal */}
+      <ReportModal
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+      />
+
+      {/* Hardware Physics & Sizing Matrix Modal */}
+      <HardwareModal
+        isOpen={showHardwareModal}
+        onClose={() => setShowHardwareModal(false)}
+        hardware={hardware}
+      />
     </div>
   );
 }
