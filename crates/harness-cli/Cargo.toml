@@ -25,3 +25,4 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 serde_json = { workspace = true }
 colored = "2.1"
+rand = { workspace = true }

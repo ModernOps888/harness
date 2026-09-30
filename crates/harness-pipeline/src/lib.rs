@@ -13,5 +13,8 @@ pub use layer_streamer::TemporalLayerStreamer;
 pub use offload::{HybridOffloader, OffloadProfile};
 pub use sampler::{SamplingConfig, TokenSampler};
 pub use scheduler::RequestScheduler;
-pub use speculative::{SpeculativeDecoder, SpeculativeDraft};
+pub use speculative::{
+    AdaptiveComparisonReport, AdaptiveSpeculativeConfig, AdaptiveSpeculativeDecoder,
+    AdaptiveVerificationResult, SpeculativeBenchmarkResult, SpeculativeDecoder, SpeculativeDraft,
+};
 pub use stigmergy::{PheromoneEdge, StigmergicTrajectoryManager};

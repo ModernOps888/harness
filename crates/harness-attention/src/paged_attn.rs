@@ -22,6 +22,7 @@ pub struct PagedAttentionManager {
     free_blocks: VecDeque<BlockId>,
     // Mapping from Request ID -> Ordered sequence of allocated physical blocks
     block_tables: HashMap<RequestId, Vec<BlockId>>,
+    request_tokens: HashMap<RequestId, usize>,
 }
 
 impl PagedAttentionManager {
@@ -45,6 +46,7 @@ impl PagedAttentionManager {
             physical_blocks,
             free_blocks,
             block_tables: HashMap::new(),
+            request_tokens: HashMap::new(),
         }
     }
 
@@ -85,8 +87,14 @@ impl PagedAttentionManager {
         Ok(())
     }
 
+    /// Record active tokens assigned to a request for exact internal fragmentation calculation
+    pub fn record_tokens(&mut self, request_id: &RequestId, count: usize) {
+        *self.request_tokens.entry(*request_id).or_insert(0) += count;
+    }
+
     /// Free all memory blocks associated with a request upon generation finish
     pub fn free_request(&mut self, request_id: &RequestId) {
+        self.request_tokens.remove(request_id);
         if let Some(blocks) = self.block_tables.remove(request_id) {
             for block_id in blocks {
                 let block = &mut self.physical_blocks[block_id];
@@ -111,14 +119,24 @@ impl PagedAttentionManager {
         self.total_blocks
     }
 
+    /// Calculates exact mathematical internal fragmentation across all active KV blocks:
+    /// fragmentation = (total_allocated_block_slots - total_active_tokens) / total_allocated_block_slots
     pub fn memory_fragmentation_ratio(&self) -> f32 {
-        // PagedAttention fragmentation is bounded by (1 block / total allocated tokens)
-        let used = self.total_blocks - self.free_blocks.len();
-        if used == 0 {
+        let mut total_allocated_slots = 0;
+        let mut total_used_tokens = 0;
+
+        for (req_id, blocks) in &self.block_tables {
+            let capacity = blocks.len() * self.block_size;
+            total_allocated_slots += capacity;
+            let tokens = self.request_tokens.get(req_id).copied().unwrap_or(capacity);
+            total_used_tokens += tokens.min(capacity);
+        }
+
+        if total_allocated_slots == 0 {
             0.0
         } else {
-            // Less than 2% internal fragmentation on average
-            0.018
+            let unused_slots = total_allocated_slots.saturating_sub(total_used_tokens);
+            (unused_slots as f32 / total_allocated_slots as f32).clamp(0.0, 1.0)
         }
     }
 }
