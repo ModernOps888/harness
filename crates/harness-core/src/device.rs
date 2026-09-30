@@ -3,19 +3,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// Available compute backend devices
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum Device {
+    #[default]
     Cpu,
     Cuda(usize),  // NVIDIA CUDA index
     Rocm(usize),  // AMD ROCm/HIP index
     Metal(usize), // Apple Silicon Metal index
     Vulkan(usize),// Cross-platform Vulkan compute index
-}
-
-impl Default for Device {
-    fn default() -> Self {
-        Self::Cpu
-    }
 }
 
 impl std::fmt::Display for Device {

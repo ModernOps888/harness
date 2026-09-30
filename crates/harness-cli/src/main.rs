@@ -636,8 +636,8 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", "  [LIVE 7B MODEL BENCHMARK EXECUTION]".bold().yellow());
                 println!("  Target 7B Model: {}\n", model.green().bold());
 
-                // Test 1: Real Coding (HumanEval style)
-                print!("  • Running Live Coding Evaluation (HumanEval)... ");
+                // Test 1: Coding Smoke Test (Palindrome)
+                print!("  • Running Coding Smoke Test (Palindrome Prompt)... ");
                 io::stdout().flush()?;
                 let (code_out, code_metrics) = proxy.chat_completion(
                     &model,
@@ -656,8 +656,8 @@ async fn main() -> anyhow::Result<()> {
                     if code_pass { "100% Valid Rust" } else { "Evaluated" }
                 );
 
-                // Test 2: Real Math (GSM8K style)
-                print!("  • Running Live Math Evaluation (GSM8K)... ");
+                // Test 2: Math Reasoning Smoke Test (Word Problem)
+                print!("  • Running Math Reasoning Smoke Test (Word Problem)... ");
                 io::stdout().flush()?;
                 let (math_out, math_metrics) = proxy.chat_completion(
                     &model,
@@ -722,8 +722,8 @@ async fn main() -> anyhow::Result<()> {
             println!("  +-------------------------------------+--------------------+--------------------+");
             println!("  | Live Evaluation Task / Primitive     | Measured Result    | Verification Status|");
             println!("  +-------------------------------------+--------------------+--------------------+");
-            println!("  | Coding Task (HumanEval Palindrome)  | {:<18} | {:<18} |", format!("{:.1} tok/s", code_speed).bold().green(), if code_pass { "100% Valid Rust" } else { "Evaluated" });
-            println!("  | Math Reasoning (GSM8K Arithmetic)   | {:<18} | {:<18} |", format!("{:.1} tok/s", math_speed).bold().green(), if math_pass { "$260 Exact Match" } else { "Evaluated" });
+            println!("  | Coding Smoke Test (Palindrome)      | {:<18} | {:<18} |", format!("{:.1} tok/s", code_speed).bold().green(), if code_pass { "100% Valid Rust" } else { "Evaluated" });
+            println!("  | Math Smoke Test (Word Problem)      | {:<18} | {:<18} |", format!("{:.1} tok/s", math_speed).bold().green(), if math_pass { "$260 Exact Match" } else { "Evaluated" });
             println!("  | Tool Schema (DFA JSON Extraction)   | {:<18} | {:<18} |", "Valid JSON Schema", if json_valid { "Guaranteed Valid" } else { "Parsed" });
             println!("  | Time To First Token (Warm TTFT)     | {:<18} | {:<18} |", ttft_display.bold().green(), ttft_status);
             println!("  | PagedAttention Memory Pool          | {:<18} | {:<18} |", format!("{:.1}% Frag", paged_frag), "Zero Memory Waste");

@@ -1,11 +1,11 @@
-# 🚀 HARNESS: Frontier Pure-Rust LLM Inference Engine & Bio-SNN Platform
+# 🚀 HARNESS: Autonomous Pure-Rust LLM Inference Orchestration & Safety Middleware
 
 [![Multi-Platform CI](https://github.com/ModernOps888/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernOps888/harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20(Metal%20UMA)%20%7C%20Windows%20(CUDA%2FROCm)-blueviolet.svg)](#multi-os-hardware-auto-detection)
 
-**HARNESS** is a high-performance, pure-Rust neural inference engine and autonomous agent runtime designed to overcome the critical memory and latency walls of modern large language models. By fusing high-throughput systems programming with biological primitives from evolutionary neuroscience (such as **Leaky Integrate-and-Fire (LIF) Spiking Attention**, **Hippocampal Dual-Memory Consolidation (CLS Theory)**, **Cortical Lateral Inhibition**, and **Stigmergic Ant Colony Search**), HARNESS achieves state-of-the-art inference efficiency, enabling **70B parameter models to run smoothly within 8GB VRAM consumer GPUs** at real-time streaming speeds, and unleashing massive **671B Sparse MoE models** on unified memory and multi-GPU systems.
+**HARNESS** is a high-performance, pure-Rust inference orchestration, guardrail, and telemetry middleware designed to sit in front of local and remote LLM runners (such as Ollama, llama.cpp, and vLLM). By integrating biological and algorithmic safety primitives—including **DFA Constrained Schema Decoding**, **Shannon Entropy Hallucination Gating**, **Leaky Integrate-and-Fire (LIF) Spiking Attention**, and **PagedAttention Memory Accounting**—HARNESS enforces deterministic agent behavior and real-time hardware telemetry without sacrificing execution performance.
 
 ---
 

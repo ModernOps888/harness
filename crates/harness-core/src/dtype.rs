@@ -37,7 +37,7 @@ impl DType {
     /// Size in bytes for N elements (rounded up for sub-byte types)
     pub const fn byte_size_for_elements(&self, count: usize) -> usize {
         let total_bits = count * self.bit_size();
-        (total_bits + 7) / 8
+        total_bits.div_ceil(8)
     }
 
     /// Returns whether this datatype is a quantized low-precision type (<= 8 bits)
