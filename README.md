@@ -116,10 +116,10 @@ $$z_i^* = z_i - \gamma \sum_{j \neq i} W_{ij} \sigma(z_j)$$
 Suppresses noisy tail logits, concentrating probability mass on mathematically sound trajectories and eliminating hallucination drift. Real-time Shannon entropy $H(X) = -\sum p(x) \ln p(x)$ triggers instant self-verification when uncertainty exceeds 0.40 nats.
 
 ### 4. 70B-on-8B Temporal Layer Streaming (Ping-Pong DMA)
-Runs 70-billion parameter models (e.g. Llama-3.3-70B, Qwen-2.5-72B) on consumer GPUs with only 8GB VRAM:
+Models 70-billion parameter transformer layer scheduling on consumer GPUs with 8GB VRAM:
 - Deconstructs 80 transformer layers into a streaming timeline.
 - Employs **double-buffered PCIe DMA transfers**: while **Slot 0** computes layer $L_n$ in VRAM, **Slot 1** prefetches layer $L_{n+1}$ from pinned system host RAM via asynchronous non-blocking memory streams.
-- Caps peak VRAM usage to **4.8 GB**, ensuring zero Out-Of-Memory (OOM) crashes.
+- Bounds active device buffers within a **4.8 GB** target allocation, demonstrating layer-swapping scheduling without memory exhaustion.
 
 ### 5. Multi-Core Parallel FlashAttention v3 with Rayon
 FlashAttention v3 in HARNESS divides query attention heads across all available physical CPU cores using `rayon::prelude::*`. Query heads execute concurrently with zero thread contention and cache-aligned online softmax updates, removing prefill CPU bottlenecks.
@@ -197,7 +197,7 @@ cargo run -p harness-cli -- tune
 # 5. Run the official 7B SOTA benchmark comparison
 cargo run -p harness-cli -- compare7b
 
-# 6. Run 70B temporal layer streaming on 8GB VRAM
+# 6. Run 70B temporal layer streaming pipeline simulation
 cargo run -p harness-cli -- stream70b --tokens 25
 
 # 7. Launch the backend API server
