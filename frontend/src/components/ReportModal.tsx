@@ -67,7 +67,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({ isOpen, onClose }) => 
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
                 HARNESS Scientific Benchmark &amp; Telemetry Audit
                 <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded font-mono">
-                  VERIFIED
+                  LIVE TELEMETRY
                 </span>
               </h2>
               <p className="text-xs text-slate-400">

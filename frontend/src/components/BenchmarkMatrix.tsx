@@ -26,7 +26,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       icon: <BrainCircuit className="w-4 h-4 text-purple-400" />,
       badges: [
         { name: 'Multi-Step Arithmetic', score: '80.0 tok/s', baseline: '$260 Result', delta: 'Exact' },
-        { name: 'Chain of Thought', score: '100%', baseline: '3 steps', delta: 'Verified' },
+        { name: 'Chain of Thought', score: '100%', baseline: '3 steps', delta: 'Valid' },
         { name: 'Evaluation Mode', score: 'Live Execution', baseline: 'Zero hardcode', delta: 'Real' },
       ],
       progress: 100,
@@ -49,7 +49,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       badges: [
         { name: 'Llama 3.1 70B Q2_K', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s', delta: 'Physical Bus' },
         { name: 'GPU VRAM Resident', score: '7.6 GB', baseline: '18 layers', delta: 'Within 8GB' },
-        { name: 'Host RAM Offload', score: '19.2 GB', baseline: '62 layers', delta: 'Zero OOM' },
+        { name: 'Host RAM Offload', score: '19.2 GB', baseline: '62 layers', delta: 'Offloaded' },
       ],
       progress: 95,
       color: 'from-amber-500 to-orange-400',
@@ -70,7 +70,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       icon: <Zap className="w-4 h-4 text-yellow-400" />,
       badges: [
         { name: '7B Generation Speed', score: '79.4 tok/s', baseline: 'RTX 5060 VRAM', delta: 'Measured' },
-        { name: 'Dense 70B Generation', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s Bus', delta: 'Verified' },
+        { name: 'Dense 70B Generation', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s Bus', delta: 'Bus Bound' },
         { name: '7B VRAM Footprint', score: '4.2 GB', baseline: '8 GB Cap', delta: '-48%' },
       ],
       progress: 96,
