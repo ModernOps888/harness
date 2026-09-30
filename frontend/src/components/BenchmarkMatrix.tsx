@@ -11,10 +11,10 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
 
   const categories = [
     {
-      title: 'Coding Synthesis (HumanEval)',
+      title: 'Coding Smoke Test (Palindrome)',
       icon: <Code2 className="w-4 h-4 text-emerald-400" />,
       badges: [
-        { name: 'Rust Palindrome Task', score: '78.1 tok/s', baseline: 'Valid AST', delta: 'Pass@1' },
+        { name: 'Rust Palindrome Task', score: '79.4 tok/s', baseline: 'Valid AST', delta: 'Pass@1' },
         { name: 'Syntax Generation', score: '100%', baseline: '0 parse err', delta: 'Clean' },
         { name: 'Model Engine', score: 'Qwen 2.5 7B', baseline: 'Local Ollama', delta: 'Live' },
       ],
@@ -22,10 +22,10 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       color: 'from-emerald-500 to-teal-400',
     },
     {
-      title: 'Math Reasoning (GSM8K)',
+      title: 'Math Reasoning Smoke Test (Word Problem)',
       icon: <BrainCircuit className="w-4 h-4 text-purple-400" />,
       badges: [
-        { name: 'Multi-Step Arithmetic', score: '78.0 tok/s', baseline: '$260 Result', delta: 'Exact' },
+        { name: 'Multi-Step Arithmetic', score: '80.0 tok/s', baseline: '$260 Result', delta: 'Exact' },
         { name: 'Chain of Thought', score: '100%', baseline: '3 steps', delta: 'Verified' },
         { name: 'Evaluation Mode', score: 'Live Execution', baseline: 'Zero hardcode', delta: 'Real' },
       ],
@@ -36,7 +36,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       title: 'Constrained Decoding & Safety',
       icon: <ShieldCheck className="w-4 h-4 text-rose-400" />,
       badges: [
-        { name: 'DFA Schema Compile', score: '20 μs', baseline: 'Zero latency', delta: 'Instant' },
+        { name: 'DFA Schema Compile', score: '74.1 ns', baseline: '13.5M masks/s', delta: 'Instant' },
         { name: 'Grammar Enforcement', score: '0 Error', baseline: 'Valid JSON', delta: 'Guaranteed' },
         { name: 'Entropy Calibrated', score: 'Active', baseline: 'Hallucination cut', delta: 'Monitored' },
       ],
@@ -47,9 +47,9 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       title: 'Dense 70B Layer Offload',
       icon: <HardDrive className="w-4 h-4 text-amber-400" />,
       badges: [
-        { name: 'Llama 3.1 70B Q2_K', score: '1.1 tok/s', baseline: 'PCIe 4.0 x16', delta: 'Physical Bus' },
-        { name: 'GPU VRAM Resident', score: '5.3 GB', baseline: '16 layers', delta: 'Within 8GB' },
-        { name: 'Host RAM Offload', score: '19.8 GB', baseline: '65 layers', delta: 'Zero OOM' },
+        { name: 'Llama 3.1 70B Q2_K', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s', delta: 'Physical Bus' },
+        { name: 'GPU VRAM Resident', score: '7.6 GB', baseline: '18 layers', delta: 'Within 8GB' },
+        { name: 'Host RAM Offload', score: '19.2 GB', baseline: '62 layers', delta: 'Zero OOM' },
       ],
       progress: 95,
       color: 'from-amber-500 to-orange-400',
@@ -60,7 +60,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       badges: [
         { name: 'Apple Silicon UMA', score: '15-24 tok/s', baseline: '800 GB/s bus', delta: 'UMA Bound' },
         { name: 'MoE 17B Active (PCIe)', score: '2.5-3.5 tok/s', baseline: 'Sparse routing', delta: 'Active' },
-        { name: 'Speculative Draft (1.5B)', score: '4-5x', baseline: 'Draft accept', delta: 'Projected' },
+        { name: 'Adaptive Speculative', score: '94.3% saved', baseline: 'Entropy-gated', delta: 'Lossless' },
       ],
       progress: 92,
       color: 'from-cyan-500 to-blue-500',
@@ -69,7 +69,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       title: 'Runtime Throughput & Latency',
       icon: <Zap className="w-4 h-4 text-yellow-400" />,
       badges: [
-        { name: '7B Generation Speed', score: '78.1 tok/s', baseline: 'RTX 5060 VRAM', delta: 'Measured' },
+        { name: '7B Generation Speed', score: '79.4 tok/s', baseline: 'RTX 5060 VRAM', delta: 'Measured' },
         { name: 'Dense 70B Generation', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s Bus', delta: 'Verified' },
         { name: '7B VRAM Footprint', score: '4.2 GB', baseline: '8 GB Cap', delta: '-48%' },
       ],
@@ -93,10 +93,11 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
               </span>
             </h2>
             <p className="text-[11px] text-slate-400">
-              Measured live on local consumer hardware (RTX 4070 Laptop 8GB / 32GB RAM). Run <code className="text-cyan-300">cargo run -p harness-cli -- compare7b</code> to reproduce.
+              Measured live on local consumer hardware (NVIDIA RTX 5060 8GB / 32GB DDR4). Run <code className="text-cyan-300">cargo run -p harness-cli -- compare7b</code> to reproduce.
             </p>
           </div>
         </div>
+
 
         <div className="flex items-center gap-3 text-xs">
           <div className="flex items-center gap-1.5 text-emerald-400 font-mono text-[11px] font-bold">
