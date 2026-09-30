@@ -12,7 +12,7 @@ async fn main() -> anyhow::Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("Initializing HARNESS Pure-Rust LLM Inference Engine...");
+    info!("Initializing HARNESS Pure-Rust LLM Inference Orchestration Middleware...");
 
     let state = AppState::new();
 
@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     info!("🚀 HARNESS Server listening on http://{}", addr);
     info!("🔗 OpenAI API endpoint: http://{}/v1/chat/completions", addr);
-    info!("📊 Engine metrics: http://{}/metrics", addr);
+    info!("📊 Telemetry & safety metrics: http://{}/metrics", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

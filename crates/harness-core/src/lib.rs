@@ -1,6 +1,6 @@
 //! # HARNESS Core
 //!
-//! Foundational abstractions for the HARNESS inference engine:
+//! Foundational abstractions for the HARNESS inference orchestration runtime:
 //! - Device & memory management (VRAM / System RAM tracking)
 //! - Precision datatypes (FP32 down to FP4/NF4)
 //! - Memory-pooled Strided Tensors
