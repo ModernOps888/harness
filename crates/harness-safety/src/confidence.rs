@@ -26,7 +26,7 @@ impl ConfidenceScorer {
     }
 
     /// Aggregate token-level entropies into a calibrated confidence assessment
-    pub fn assess(&self, token_entropies: &[f32], generated_text: &str) -> ConfidenceAssessment {
+    pub fn assess(&self, token_entropies: &[f32], _generated_text: &str) -> ConfidenceAssessment {
         if token_entropies.is_empty() {
             return ConfidenceAssessment {
                 overall_confidence_score: 1.0,

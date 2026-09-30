@@ -1,5 +1,4 @@
 use harness_core::{Result, Tensor};
-use rayon::prelude::*;
 
 pub struct EntropyDetector {
     pub anomaly_threshold: f32, // Typically 2.5 nats

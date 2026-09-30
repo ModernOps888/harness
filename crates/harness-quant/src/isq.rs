@@ -1,6 +1,4 @@
-use harness_core::{DType, QuantizationMode, Result, Tensor};
-use std::collections::HashMap;
-use tracing::info;
+use harness_core::{DType, Result, Tensor};
 
 #[derive(Debug, Clone, Copy)]
 pub enum QuantTarget {

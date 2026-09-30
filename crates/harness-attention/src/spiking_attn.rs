@@ -1,4 +1,3 @@
-use rayon::prelude::*;
 
 /// Leaky Integrate-and-Fire (LIF) Spiking Attention Engine:
 /// Inspired by mammalian cortical neurons that operate with event-driven binary spikes

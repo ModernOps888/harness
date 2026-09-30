@@ -1,4 +1,3 @@
-use harness_core::{Result, Tensor};
 
 /// Cortical Lateral Inhibition & Winner-Take-All (WTA) Filter:
 /// Inspired by retinal horizontal cells and neocortical interneuron microcircuits.

@@ -1,5 +1,4 @@
-use harness_core::{Device, MoEConfig, Result, Tensor};
-use rayon::prelude::*;
+use harness_core::{MoEConfig, Result, Tensor};
 
 /// Gating network that computes top-k router probabilities for active experts
 pub struct MoERouter {

@@ -1,4 +1,3 @@
-use harness_core::{Result, Tensor};
 
 #[derive(Debug, Clone)]
 pub struct SpeculativeDraft {

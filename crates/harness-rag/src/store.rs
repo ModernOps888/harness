@@ -1,5 +1,4 @@
 use crate::chunker::DocumentChunk;
-use harness_core::{Result, Tensor};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::RwLock;
@@ -23,6 +22,10 @@ impl VectorStore {
             embeddings: RwLock::new(Vec::new()),
             dim,
         }
+    }
+
+    pub fn dim(&self) -> usize {
+        self.dim
     }
 
     pub fn insert(&self, chunk: DocumentChunk, embedding: Vec<f32>) {

@@ -1,4 +1,4 @@
-use harness_core::{DType, Device, HarnessError, Result, Shape, Tensor};
+use harness_core::{Device, Result, Shape, Tensor};
 use rayon::prelude::*;
 
 pub const BLOCK_SIZE: usize = 32;

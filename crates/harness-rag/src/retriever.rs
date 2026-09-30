@@ -1,4 +1,3 @@
-use crate::chunker::DocumentChunk;
 use crate::store::{ScoredDocument, VectorStore};
 use std::sync::Arc;
 
