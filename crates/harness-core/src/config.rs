@@ -71,10 +71,10 @@ impl ModelConfig {
         }
     }
 
-    /// Configuration for 70B Frontier Dense / MoE (e.g. Llama 4 Scout / 70B)
-    pub fn llama4_70b() -> Self {
+    /// Configuration for Llama 3.3 70B Dense (80 Layers, 8192 Dim, 70.55B Parameters)
+    pub fn llama3_70b() -> Self {
         Self {
-            architecture: ModelArchitecture::Llama4,
+            architecture: ModelArchitecture::Llama3,
             vocab_size: 128256,
             hidden_size: 8192,
             intermediate_size: 28672,
@@ -87,6 +87,35 @@ impl ModelConfig {
             moe: None,
             quantization: QuantizationMode::Q4_K_M,
         }
+    }
+
+    /// Configuration for Llama 4 Scout 109B Sparse MoE (109B Total, 17B Active Parameters)
+    pub fn llama4_scout_109b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Llama4,
+            vocab_size: 128256,
+            hidden_size: 5120,
+            intermediate_size: 8192,
+            num_hidden_layers: 48,
+            num_attention_heads: 40,
+            num_key_value_heads: 8,
+            max_position_embeddings: 131072,
+            rms_norm_eps: 1e-5,
+            rope_theta: 500000.0,
+            moe: Some(MoEConfig {
+                num_routed_experts: 16,
+                num_shared_experts: 1,
+                num_active_experts: 2,
+                routing_top_k: 2,
+                norm_topk_prob: true,
+            }),
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Backwards compatible alias for 70B Dense Architecture
+    pub fn llama4_70b() -> Self {
+        Self::llama3_70b()
     }
 
     /// Configuration for DeepSeek V4 Sparse MoE
