@@ -275,7 +275,7 @@ impl McpServer {
                         .cloned()
                         .unwrap_or(json!({}));
 
-                    let result_text = self.execute_tool(tool_name, &arguments)?;
+                    let result_text = self.execute_tool(tool_name, &arguments).await?;
 
                     let resp = json!({
                         "jsonrpc": "2.0",
@@ -310,46 +310,126 @@ impl McpServer {
         Ok(())
     }
 
-    fn execute_tool(&self, name: &str, args: &Value) -> anyhow::Result<String> {
+    async fn execute_tool(&self, name: &str, args: &Value) -> anyhow::Result<String> {
         match name {
             "harness_infer" => {
                 let prompt = args.get("prompt").and_then(|p| p.as_str()).unwrap_or("");
-                let model = args.get("model").and_then(|m| m.as_str()).unwrap_or("Qwen3.8-27B-ISQ");
-                let mode = args.get("constrained_mode").and_then(|m| m.as_str()).unwrap_or("none");
-                let spiking_th = args.get("spiking_threshold").and_then(|s| s.as_f64()).unwrap_or(0.35);
-                let spiking = self.spiking.lock().unwrap();
-                let sparsity_pct = ((spiking_th / 0.5) * 72.0).clamp(30.0, 85.0);
-                let _tau = spiking.decay_beta;
+                let model = args.get("model").and_then(|m| m.as_str()).unwrap_or("qwen2.5-coder:7b");
 
-                let response_text = match mode {
-                    "json_schema" => format!(
-                        "{{\n  \"status\": \"verified\",\n  \"prompt\": \"{}\",\n  \"model\": \"{}\",\n  \"engine\": \"HARNESS Pure-Rust\",\n  \"confidence\": 0.992\n}}",
-                        prompt, model
-                    ),
-                    _ => format!(
-                        "HARNESS Engine Infer [{model}]\nQuery: \"{prompt}\"\n\nActive optimizations:\n• FlashAttention v3 + PagedAttention (0.0% fragmentation)\n• LIF Spiking Attention active: {:.0}% FLOP sparsity (θ={:.2})\n• Shannon Entropy: 0.19 nats (Calibrated confidence: 98.6%)\n• Hardware: Pure-Rust SIMD + In-Situ Quantization (ISQ).",
-                        sparsity_pct, spiking_th
-                    )
+                if prompt.is_empty() {
+                    return Ok("Error: Prompt cannot be empty.".to_string());
+                }
+                let spiking_th = args.get("spiking_threshold").and_then(|s| s.as_f64()).unwrap_or(0.35);
+                let _active_decay = self.spiking.lock().unwrap().decay_beta;
+
+                // 1. Try forwarding to local HARNESS API server on port 8080
+                let client = match reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(30))
+                    .build()
+                {
+                    Ok(c) => c,
+                    Err(e) => return Ok(format!("HTTP client error: {}", e)),
                 };
-                Ok(response_text)
+
+                let harness_url = "http://127.0.0.1:8080/v1/chat/completions";
+                let payload = json!({
+                    "model": model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "spiking_threshold": spiking_th
+                });
+
+                if let Ok(res) = client.post(harness_url).json(&payload).send().await {
+                    if res.status().is_success() {
+                        if let Ok(json_res) = res.json::<serde_json::Value>().await {
+                            if let Some(content) = json_res.pointer("/choices/0/message/content").and_then(|c| c.as_str()) {
+                                return Ok(content.to_string());
+                            }
+                        }
+                    }
+                }
+
+                // 2. Fallback: try Ollama directly on port 11434
+                let ollama_url = "http://127.0.0.1:11434/api/generate";
+                let ollama_payload = json!({
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": false
+                });
+
+                if let Ok(res) = client.post(ollama_url).json(&ollama_payload).send().await {
+                    if res.status().is_success() {
+                        if let Ok(json_res) = res.json::<serde_json::Value>().await {
+                            if let Some(content) = json_res.get("response").and_then(|c| c.as_str()) {
+                                return Ok(content.to_string());
+                            }
+                        }
+                    }
+                }
+
+                Ok(format!(
+                    "HARNESS MCP Inference Notice: Neither HARNESS server (http://localhost:8080) nor Ollama (http://localhost:11434) is currently responding.\nQuery: \"{}\"\nTarget Model: {}\nTo enable live inference, run `cargo run -p harness-cli -- serve --port 8080` or `ollama serve`.",
+                    prompt, model
+                ))
             }
             "harness_verify_code" => {
                 let code = args.get("code").and_then(|c| c.as_str()).unwrap_or("");
                 let lang = args.get("language").and_then(|l| l.as_str()).unwrap_or("rust");
 
-                let has_suspicious_patterns = code.contains("TODO") || code.contains("panic!") || code.contains("unwrap()");
-                let entropy_detector = self.entropy.lock().unwrap();
-                let entropy = if has_suspicious_patterns { 0.42 } else { 0.14 };
-                let confidence = if has_suspicious_patterns { 0.88 } else { 0.99 };
-                let _h_max = entropy_detector.anomaly_threshold;
+                // 1. Compute empirical Shannon byte entropy across character distribution
+                let bytes = code.as_bytes();
+                let mut counts = [0u32; 256];
+                for &b in bytes {
+                    counts[b as usize] += 1;
+                }
+                let total = bytes.len() as f64;
+                let mut byte_entropy = 0.0f64;
+                if total > 0.0 {
+                    for &c in &counts {
+                        if c > 0 {
+                            let p = c as f64 / total;
+                            byte_entropy -= p * p.ln();
+                        }
+                    }
+                }
+
+                let entropy_limit = self.entropy.lock().unwrap().anomaly_threshold;
+                let is_anomalous = (byte_entropy as f32) > entropy_limit;
+
+                // 2. Structural delimiter invariant verification (parentheses, braces, brackets)
+                let mut stack = Vec::new();
+                let mut balanced = true;
+                for ch in code.chars() {
+                    match ch {
+                        '(' | '{' | '[' => stack.push(ch),
+                        ')' => if stack.pop() != Some('(') { balanced = false; break; },
+                        '}' => if stack.pop() != Some('{') { balanced = false; break; },
+                        ']' => if stack.pop() != Some('[') { balanced = false; break; },
+                        _ => {}
+                    }
+                }
+                if !stack.is_empty() {
+                    balanced = false;
+                }
+
+                // 3. Scan code patterns
+                let todos = code.matches("TODO").count();
+                let panics = code.matches("panic!").count();
+                let unwraps = code.matches(".unwrap()").count();
+                let unique_bytes = counts.iter().filter(|&&c| c > 0).count();
 
                 let result = format!(
-                    "HARNESS Code Factual Verification [{lang}]\n• Code size: {} bytes\n• Shannon Anomaly Entropy: {:.2} nats ({})\n• Calibrated Confidence: {:.1}%\n• Structural DFA check: 100% Valid\n• Verdict: {}",
+                    "HARNESS Code Static Verification [{lang}]\n• Code size: {} bytes across {} lines\n• Shannon Byte Entropy: {:.3} nats (distribution across {} unique byte symbols)\n• Anomaly Check: {}\n• Delimiter Invariant Check: {}\n• Pattern Scans: {} TODOs, {} panic! calls, {} unwrap() calls\n• Structural Verdict: {}",
                     code.len(),
-                    entropy,
-                    if entropy < 0.25 { "Low Uncertainty / Verified" } else { "Moderate Uncertainty" },
-                    confidence * 100.0,
-                    if confidence > 0.90 { "PASSED: Factual & Invariant" } else { "REVIEW RECOMMENDED" }
+                    code.lines().count(),
+                    byte_entropy,
+                    unique_bytes,
+                    if is_anomalous { "High Dispersion / Anomaly" } else { "Normal Distribution" },
+                    if balanced { "Balanced (0 syntax closure errors)" } else { "Unbalanced Delimiters Detected" },
+                    todos,
+                    panics,
+                    unwraps,
+                    if balanced && panics == 0 { "Passed Structural Bounds" } else { "Review Recommended" }
                 );
                 Ok(result)
             }
@@ -370,20 +450,26 @@ impl McpServer {
             "harness_hippocampal_memory" => {
                 let action = args.get("action").and_then(|a| a.as_str()).unwrap_or("consolidate");
                 let session_id = args.get("session_id").and_then(|s| s.as_str()).unwrap_or("default");
+                let context = args.get("context").and_then(|c| c.as_str()).unwrap_or(session_id);
                 let mut hippo = self.hippo.lock().unwrap();
 
                 if action == "consolidate" {
-                    let dummy_hidden = vec![0.1f32; 128 * 4];
-                    let engram = hippo.consolidate_to_engram(session_id, (0, 4), &dummy_hidden, 128);
+                    // Encode context text into normalized activation vector for consolidation
+                    let dim = 128;
+                    let mut hidden = vec![0.0f32; dim * 4];
+                    for (i, &b) in context.as_bytes().iter().take(dim * 4).enumerate() {
+                        hidden[i] = (b as f32 / 127.5) - 1.0;
+                    }
+                    let engram = hippo.consolidate_to_engram(session_id, (0, 4), &hidden, dim);
                     let savings = hippo.memory_savings_ratio(4, 1);
                     Ok(format!(
-                        "Hippocampal CLS Memory Consolidation Complete:\n• Consolidated Engram ID: {}\n• Session: {}\n• KV Memory Compression: {:.1}%\n• Status: Active cortical indexing enabled",
-                        engram.engram_id, session_id, savings * 100.0
+                        "Hippocampal CLS Memory Consolidation Complete:\n• Consolidated Engram ID: {}\n• Session: {}\n• KV Memory Compression: {:.1}%\n• Dense Vector Dimension: {}\n• Status: Active cortical indexing enabled",
+                        engram.engram_id, session_id, savings * 100.0, engram.dense_representation.len()
                     ))
                 } else {
                     let engrams = hippo.consolidated_engrams.get(session_id).map(|e| e.len()).unwrap_or(0);
                     Ok(format!(
-                        "Hippocampal Memory Status for Session \"{}\":\n• Persistent Cortical Engrams: {}\n• Threshold: {} tokens",
+                        "Hippocampal Memory Status for Session \"{}\":\n• Persistent Cortical Engrams: {}\n• Volatile Threshold: {} tokens",
                         session_id, engrams, hippo.volatile_threshold_tokens
                     ))
                 }
