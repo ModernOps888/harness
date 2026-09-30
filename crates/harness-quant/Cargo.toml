@@ -1,0 +1,12 @@
+[package]
+name = "harness-quant"
+version = "0.1.0"
+edition = "2021"
+description = "In-Situ Quantization (ISQ), Q4_K_M, FP8, and NF4 engines for HARNESS"
+
+[dependencies]
+harness-core = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+half = { workspace = true }
+rayon = { workspace = true }

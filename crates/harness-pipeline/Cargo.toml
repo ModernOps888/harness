@@ -1,0 +1,18 @@
+[package]
+name = "harness-pipeline"
+version = "0.1.0"
+edition = "2021"
+description = "Continuous batching, speculative decoding, hybrid GPU/CPU offloader and 70B layer streaming for HARNESS"
+
+[dependencies]
+harness-core = { workspace = true }
+harness-attention = { workspace = true }
+harness-models = { workspace = true }
+harness-quant = { workspace = true }
+serde = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+rayon = { workspace = true }
+rand = { workspace = true }
+uuid = { workspace = true }
+futures-util = { workspace = true }

@@ -1,0 +1,15 @@
+[package]
+name = "harness-loader"
+version = "0.1.0"
+edition = "2021"
+description = "Zero-copy memory mapped model weights loader (SafeTensors, GGUF) for HARNESS"
+
+[dependencies]
+harness-core = { workspace = true }
+memmap2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+byteorder = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+rayon = { workspace = true }

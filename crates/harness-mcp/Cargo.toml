@@ -1,0 +1,17 @@
+[package]
+name = "harness-mcp"
+version = "0.1.0"
+edition = "2021"
+description = "Model Context Protocol (MCP) Server for HARNESS Pure-Rust LLM Inference Engine"
+
+[dependencies]
+harness-core = { workspace = true }
+harness-pipeline = { workspace = true }
+harness-safety = { workspace = true }
+harness-rag = { workspace = true }
+harness-attention = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }

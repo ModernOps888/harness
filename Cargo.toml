@@ -1,0 +1,65 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/harness-core",
+    "crates/harness-loader",
+    "crates/harness-quant",
+    "crates/harness-attention",
+    "crates/harness-models",
+    "crates/harness-pipeline",
+    "crates/harness-safety",
+    "crates/harness-rag",
+    "crates/harness-server",
+    "crates/harness-cli",
+    "crates/harness-mcp",
+]
+
+[workspace.dependencies]
+# Internal workspace crates
+harness-core = { path = "crates/harness-core" }
+harness-loader = { path = "crates/harness-loader" }
+harness-quant = { path = "crates/harness-quant" }
+harness-attention = { path = "crates/harness-attention" }
+harness-models = { path = "crates/harness-models" }
+harness-pipeline = { path = "crates/harness-pipeline" }
+harness-safety = { path = "crates/harness-safety" }
+harness-rag = { path = "crates/harness-rag" }
+harness-server = { path = "crates/harness-server" }
+harness-mcp = { path = "crates/harness-mcp" }
+
+# System & Async
+tokio = { version = "1.43", features = ["full"] }
+rayon = "1.10"
+memmap2 = "0.9"
+
+# Serialization & Data
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+byteorder = "1.5"
+
+# Web & Networking
+axum = { version = "0.8", features = ["ws", "macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+
+# CLI & Utilities
+clap = { version = "4.5", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2.0"
+anyhow = "1.0"
+uuid = { version = "1.13", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Math & Data Types
+half = { version = "2.4", features = ["serde"] }
+regex = "1.11"
+rand = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
