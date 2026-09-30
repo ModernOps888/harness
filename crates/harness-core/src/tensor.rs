@@ -95,11 +95,24 @@ impl Tensor {
                 to: DType::F32,
             });
         }
-        let byte_len = self.numel() * 4;
+        let byte_len = self.numel().checked_mul(4).ok_or_else(|| {
+            HarnessError::InvalidShape("Tensor size arithmetic overflow in byte calculation".into())
+        })?;
+        if self.offset.checked_add(byte_len).map_or(true, |end| end > self.data.len()) {
+            return Err(HarnessError::InvalidShape(format!(
+                "Offset {} + byte length {} exceeds buffer size {}",
+                self.offset, byte_len, self.data.len()
+            )));
+        }
         let slice = &self.data[self.offset..self.offset + byte_len];
-        // Safe transmutation for 4-byte aligned f32s in le
-        let ptr = slice.as_ptr() as *const f32;
-        unsafe { Ok(std::slice::from_raw_parts(ptr, self.numel())) }
+        let ptr = slice.as_ptr();
+        if (ptr as usize) % std::mem::align_of::<f32>() != 0 {
+            return Err(HarnessError::InvalidShape(
+                "Buffer is not 4-byte aligned for safe f32 slice casting".into(),
+            ));
+        }
+        let f32_ptr = ptr as *const f32;
+        unsafe { Ok(std::slice::from_raw_parts(f32_ptr, self.numel())) }
     }
 
     /// Reshape tensor (must have same total number of elements)

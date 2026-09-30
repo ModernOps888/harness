@@ -26,6 +26,9 @@ pub enum HarnessError {
         found: Vec<usize>,
     },
 
+    #[error("Invalid tensor shape or buffer bounds: {0}")]
+    InvalidShape(String),
+
     #[error("Unsupported DType conversion from {from:?} to {to:?}")]
     UnsupportedDTypeConversion {
         from: crate::dtype::DType,
