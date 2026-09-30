@@ -71,3 +71,36 @@ fn test_radix_prefix_cache_reuse() {
     assert_eq!(no_match_len, 0);
     assert!(no_blocks.is_empty());
 }
+
+#[test]
+fn test_paged_attention_exact_fragmentation_and_churn() {
+    use harness_attention::PagedAttentionManager;
+    use uuid::Uuid;
+
+    let mut manager = PagedAttentionManager::new(16, 100);
+    assert_eq!(manager.total_block_count(), 100);
+    assert_eq!(manager.free_block_count(), 100);
+    assert_eq!(manager.memory_fragmentation_ratio(), 0.0);
+
+    let req1 = Uuid::new_v4();
+    let _b1 = manager.allocate_block(req1).unwrap();
+    let _b2 = manager.allocate_block(req1).unwrap();
+    assert_eq!(manager.free_block_count(), 98);
+
+    // 2 blocks of 16 tokens = 32 capacity. If req1 generates 32 tokens, 0% fragmentation!
+    manager.record_tokens(&req1, 32);
+    assert_eq!(manager.memory_fragmentation_ratio(), 0.0);
+
+    // If req2 only uses 24 tokens (8 unused in tail block), fragmentation is exactly 8 / 32 = 0.25 (25%)
+    let mut manager2 = PagedAttentionManager::new(16, 100);
+    let req2 = Uuid::new_v4();
+    let _ = manager2.allocate_block(req2).unwrap();
+    let _ = manager2.allocate_block(req2).unwrap();
+    manager2.record_tokens(&req2, 24);
+    assert!((manager2.memory_fragmentation_ratio() - 0.25).abs() < 1e-5);
+
+    // Free request and verify complete leak-free reclamation
+    manager2.free_request(&req2);
+    assert_eq!(manager2.free_block_count(), 100);
+    assert_eq!(manager2.memory_fragmentation_ratio(), 0.0);
+}
