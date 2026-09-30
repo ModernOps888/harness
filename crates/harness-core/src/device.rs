@@ -140,7 +140,14 @@ fn detect_system_ram_gb() -> f32 {
     }
     #[cfg(target_os = "macos")]
     {
-        32.0 // Apple Silicon Unified Memory
+        if let Ok(output) = std::process::Command::new("sysctl").args(["-n", "hw.memsize"]).output() {
+            if let Ok(s) = std::str::from_utf8(&output.stdout) {
+                if let Ok(bytes) = s.trim().parse::<f64>() {
+                    return (bytes / (1024.0 * 1024.0 * 1024.0)) as f32;
+                }
+            }
+        }
+        32.0 // Apple Silicon Unified Memory fallback
     }
     #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
     {
@@ -150,7 +157,8 @@ fn detect_system_ram_gb() -> f32 {
 
 fn detect_accelerator(os: &str) -> (String, Device, f32) {
     if os == "macos" {
-        return ("Apple Silicon Metal (Unified Memory)".into(), Device::Metal(0), 32.0);
+        let ram = detect_system_ram_gb();
+        return (format!("Apple Silicon Metal Unified Memory ({:.0}GB UMA)", ram), Device::Metal(0), ram);
     }
 
     // Check for NVIDIA CUDA presence via environment or driver paths
