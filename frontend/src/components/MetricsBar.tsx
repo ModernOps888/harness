@@ -86,7 +86,9 @@ export const MetricsBar: React.FC<MetricsProps> = ({
             {isStreaming && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />}
           </div>
           <div className="mt-2 flex items-baseline gap-1">
-            <span className="text-2xl font-bold font-mono text-emerald-400">{tokPerSec.toFixed(1)}</span>
+            <span className="text-2xl font-bold font-mono text-emerald-400">
+              {tokPerSec > 0 ? tokPerSec.toFixed(1) : '--'}
+            </span>
             <span className="text-xs text-slate-500 font-mono">tok/s</span>
           </div>
         </div>
@@ -100,7 +102,9 @@ export const MetricsBar: React.FC<MetricsProps> = ({
           </span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
-          <span className="text-2xl font-bold font-mono text-cyan-300">{ttftMs.toFixed(1)}</span>
+          <span className="text-2xl font-bold font-mono text-cyan-300">
+            {ttftMs > 0 ? ttftMs.toFixed(1) : '--'}
+          </span>
           <span className="text-xs text-slate-500 font-mono">ms</span>
         </div>
       </div>

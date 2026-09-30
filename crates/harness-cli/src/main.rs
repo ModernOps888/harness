@@ -621,7 +621,7 @@ async fn main() -> anyhow::Result<()> {
             println!("{} (Mask generation: {} μs, 100% schema guarantee)\n", "VERIFIED".green(), dfa_latency_us);
 
             let config = BackendConfig::auto_detect().await;
-            let measured_ttft = 38.4f64;
+            let mut measured_ttft: Option<f64> = None;
             let mut code_speed = 0.0f64;
             let mut math_speed = 0.0f64;
             let mut code_pass = false;
@@ -647,6 +647,9 @@ async fn main() -> anyhow::Result<()> {
                 ).await.unwrap_or_default();
                 code_pass = code_out.contains("fn is_palindrome") && (code_out.contains("chars") || code_out.contains("rev"));
                 code_speed = code_metrics.tok_per_sec;
+                if code_metrics.ttft_ms > 0.0 {
+                    measured_ttft = Some(code_metrics.ttft_ms);
+                }
                 println!("{} ({:.1} tok/s, Correctness: {})",
                     if code_pass { "PASSED".bold().green() } else { "VALIDATED".yellow() },
                     code_speed,
@@ -664,6 +667,9 @@ async fn main() -> anyhow::Result<()> {
                 ).await.unwrap_or_default();
                 math_pass = math_out.contains("260");
                 math_speed = math_metrics.tok_per_sec;
+                if measured_ttft.is_none() && math_metrics.ttft_ms > 0.0 {
+                    measured_ttft = Some(math_metrics.ttft_ms);
+                }
                 println!("{} ({:.1} tok/s, Final Answer: {})",
                     if math_pass { "PASSED".bold().green() } else { "VALIDATED".yellow() },
                     math_speed,
@@ -694,8 +700,21 @@ async fn main() -> anyhow::Result<()> {
             } else if math_speed > 0.0 {
                 math_speed
             } else {
-                72.5
+                0.0
             };
+
+            let ttft_display = match measured_ttft {
+                Some(ms) => format!("{:.1} ms", ms),
+                None => "N/A (Offline)".to_string(),
+            };
+            let ttft_status = if measured_ttft.is_some() { "Live Measured" } else { "Ollama Offline" };
+
+            let speed_display = if avg_speed > 0.0 {
+                format!("{:.1} tok/s", avg_speed)
+            } else {
+                "N/A (Offline)".to_string()
+            };
+            let speed_status = if avg_speed > 0.0 { "Active Local GPU" } else { "Ollama Offline" };
 
             println!("{}", "========================================================================================".bold());
             println!("{}", "  VERIFIED LIVE EVALUATION SCORECARD: REAL MEASURED RUNTIME METRICS".bold().yellow());
@@ -706,13 +725,13 @@ async fn main() -> anyhow::Result<()> {
             println!("  | Coding Task (HumanEval Palindrome)  | {:<18} | {:<18} |", format!("{:.1} tok/s", code_speed).bold().green(), if code_pass { "100% Valid Rust" } else { "Evaluated" });
             println!("  | Math Reasoning (GSM8K Arithmetic)   | {:<18} | {:<18} |", format!("{:.1} tok/s", math_speed).bold().green(), if math_pass { "$260 Exact Match" } else { "Evaluated" });
             println!("  | Tool Schema (DFA JSON Extraction)   | {:<18} | {:<18} |", "Valid JSON Schema", if json_valid { "Guaranteed Valid" } else { "Parsed" });
-            println!("  | Time To First Token (Warm TTFT)     | {:<18} | {:<18} |", format!("{:.1} ms", measured_ttft).bold().green(), "Measured Latency");
+            println!("  | Time To First Token (Warm TTFT)     | {:<18} | {:<18} |", ttft_display.bold().green(), ttft_status);
             println!("  | PagedAttention Memory Pool          | {:<18} | {:<18} |", format!("{:.1}% Frag", paged_frag), "Zero Memory Waste");
             println!("  | LIF Spiking Attention Sparsity      | {:<18} | {:<18} |", format!("{:.1}% Pruned", sparsity), "Compute Reduction");
             println!("  | Hippocampal Dual-Memory Engram      | {:<18} | {:<18} |", format!("{:.1}% Saved", savings), "Lossless Retrieval");
             println!("  | Lateral Inhibition Entropy Filter   | {:<18} | {:<18} |", format!("{:.2}->{:.2} nats", ent_before, ent_after), "Logit Sharpening");
             println!("  | DFA Grammar Mask Generation         | {:<18} | {:<18} |", format!("{} μs", dfa_latency_us), "Microsecond Guard");
-            println!("  | Generation Throughput (Average)     | {:<18} | {:<18} |", format!("{:.1} tok/s", avg_speed).bold().green(), "Active Local GPU");
+            println!("  | Generation Throughput (Average)     | {:<18} | {:<18} |", speed_display.bold().green(), speed_status);
             println!("  | Peak Active VRAM Footprint          | {:<18} | {:<18} |", "4.7 GB (Q4_K_M)", "Fits 8GB VRAM GPU");
             println!("  +-------------------------------------+--------------------+--------------------+\n");
 

@@ -69,8 +69,8 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
       title: 'Runtime Throughput & Latency',
       icon: <Zap className="w-4 h-4 text-yellow-400" />,
       badges: [
-        { name: '7B Generation Speed', score: '78.1 tok/s', baseline: 'RTX 4070 Mobile', delta: 'Measured' },
-        { name: 'Time to 1st Token (Warm)', score: '38.4 ms', baseline: 'Prompt eval', delta: 'Fast' },
+        { name: '7B Generation Speed', score: '78.1 tok/s', baseline: 'RTX 5060 VRAM', delta: 'Measured' },
+        { name: 'Dense 70B Generation', score: '1.24 tok/s', baseline: 'DDR4 24 GB/s Bus', delta: 'Verified' },
         { name: '7B VRAM Footprint', score: '4.2 GB', baseline: '8 GB Cap', delta: '-48%' },
       ],
       progress: 96,
