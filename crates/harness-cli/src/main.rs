@@ -803,7 +803,7 @@ async fn main() -> anyhow::Result<()> {
             let dfa_latency_us = dfa_start.elapsed().as_micros();
 
             let report_content = format!(
-r#"# HARNESS: Official Verified Benchmark & Hardware Telemetry Report
+r#"# HARNESS: Official Systems Telemetry & Hardware Report
 
 **Generated:** {} UTC  
 **Engine Version:** 0.1.0 (Pure-Rust, Zero Python Runtime)  
@@ -818,7 +818,7 @@ r#"# HARNESS: Official Verified Benchmark & Hardware Telemetry Report
 
 HARNESS is an autonomous high-performance inference orchestration and safety middleware authored in 100% pure Rust. It introduces biologically inspired cortical lateral inhibition, leaky integrate-and-fire (LIF) sparse attention, hippocampal dual-memory consolidation, entropy-gated adaptive speculative decoding, and deterministic finite automaton (DFA) constrained decoding.
 
-### Verified Live Runtime Telemetry & Primitives Scorecard
+### Live Runtime Telemetry & Primitives Scorecard
 
 | Evaluation Task / Primitive | Active Engine Measurement | Hardware Grounding / Mechanism |
 | :--- | :--- | :--- |
