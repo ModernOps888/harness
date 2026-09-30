@@ -196,26 +196,14 @@ fn generate_dynamic_response(
         "the requested system state".to_string()
     };
 
-    // Detect prompt intent dynamically
+    // Detect prompt intent dynamically with exact token matching
     let is_json_requested = constrained_mode == "json_schema" || p_lower.contains("json") || p_lower.contains("schema");
-    let is_math_requested = p_lower.contains("math")
-        || p_lower.contains("calculate")
-        || p_lower.contains("solve")
-        || p_lower.contains("equation")
-        || p_lower.contains("probability")
-        || p_lower.contains("integral")
-        || p_lower.contains("derivative")
-        || p_lower.contains("algebra")
-        || p_lower.contains("average")
-        || p_lower.contains("ratio")
-        || p_lower.contains("percentage")
-        || p_lower.contains("prime")
-        || p_lower.contains("fibonacci")
-        || p_lower.contains("sum")
-        || p_lower.contains("gsm8k")
-        || (p_lower.contains("how many") && p_lower.chars().any(|c| c.is_ascii_digit()));
     let is_code_requested = p_lower.contains("code")
         || p_lower.contains("rust")
+        || p_lower.contains("python")
+        || p_lower.contains("typescript")
+        || p_lower.contains("javascript")
+        || p_lower.contains("golang")
         || p_lower.contains("implement")
         || p_lower.contains("function")
         || p_lower.contains("algorithm")
@@ -225,7 +213,19 @@ fn generate_dynamic_response(
         || p_lower.contains("lru")
         || p_lower.contains("quicksort")
         || p_lower.contains("binary search")
-        || p_lower.contains("cache");
+        || p_lower.contains("cache")
+        || p_lower.contains("scaffold")
+        || p_lower.contains("write a")
+        || p_lower.contains("write an");
+    let is_math_requested = !is_code_requested && (
+        words.iter().any(|w| {
+            let wl = w.to_lowercase();
+            wl == "math" || wl == "calculate" || wl == "solve" || wl == "equation"
+                || wl == "probability" || wl == "integral" || wl == "derivative"
+                || wl == "algebra" || wl == "average" || wl == "ratio" || wl == "percentage"
+                || wl == "prime" || wl == "fibonacci" || wl == "sum" || wl == "gsm8k"
+        }) || (p_lower.contains("how many") && p_lower.chars().any(|c| c.is_ascii_digit()))
+    );
     let is_agent_requested = p_lower.contains("agent")
         || p_lower.contains("tool")
         || p_lower.contains("circuit breaker")
