@@ -11,7 +11,7 @@
 
 ## 1. Executive Summary & Quality Bounds
 
-HARNESS is an autonomous high-performance inference engine authored from first principles in 100% pure Rust. It introduces biologically inspired cortical lateral inhibition, leaky integrate-and-fire (LIF) sparse attention, hippocampal dual-memory consolidation, and deterministic finite automaton (DFA) constrained decoding.
+HARNESS is an autonomous high-performance inference orchestration and safety middleware authored in 100% pure Rust. It introduces biologically inspired cortical lateral inhibition, leaky integrate-and-fire (LIF) sparse attention, hippocampal dual-memory consolidation, entropy-gated adaptive speculative decoding, and deterministic finite automaton (DFA) constrained decoding.
 
 ### Verified Live Runtime Telemetry & Primitives Scorecard
 

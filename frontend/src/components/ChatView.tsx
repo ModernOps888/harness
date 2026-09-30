@@ -54,9 +54,9 @@ export const ChatView: React.FC<Props> = ({
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
               <Bot className="w-6 h-6 text-emerald-400" />
             </div>
-            <h2 className="text-lg font-bold text-slate-200">HARNESS Pure-Rust Engine Ready</h2>
+            <h2 className="text-lg font-bold text-slate-200">HARNESS Middleware Active</h2>
             <p className="text-xs text-slate-400 max-w-md mt-1 mb-6">
-              World-class local LLM inference with zero-copy memory mapping, PagedAttention, speculative decoding, and calibrated anti-hallucination.
+              Autonomous pure-Rust LLM inference orchestration with zero-copy memory mapping, PagedAttention, adaptive speculative decoding, and calibrated safety guardrails.
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">
               {[

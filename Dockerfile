@@ -1,6 +1,6 @@
 # ══════════════════════════════════════════════════════════════════════
-#  HARNESS PURE-RUST LLM INFERENCE ENGINE & BIO-SNN PLATFORM
-#  Multi-Stage Container: Ubuntu 24.04 + Rust 1.94+ + Node.js 24 + CUDA/Metal/ROCm
+#  HARNESS PURE-RUST LLM INFERENCE ORCHESTRATION & SAFETY MIDDLEWARE
+#  Multi-Stage Container: Ubuntu 24.04 + Rust 1.85+ + Node.js 22 + CUDA/Metal/ROCm
 # ══════════════════════════════════════════════════════════════════════
 
 # ── Stage 1: Frontend Build ──────────────────────────────────────────

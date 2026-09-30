@@ -2,7 +2,7 @@
 name = "harness-cli"
 version = "0.1.0"
 edition = "2021"
-description = "Command line interface for HARNESS LLM Engine (chat, serve, bench, tune, 70b-streaming)"
+description = "Command line interface for HARNESS LLM Orchestration & Middleware (chat, serve, bench, stress, tune, 70b-streaming)"
 
 [dependencies]
 harness-core = { workspace = true }

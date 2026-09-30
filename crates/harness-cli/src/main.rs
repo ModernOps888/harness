@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 
 #[derive(Parser)]
 #[command(name = "harness")]
-#[command(about = "HARNESS: World-Class High-Performance Pure-Rust LLM Inference Engine", long_about = None)]
+#[command(about = "HARNESS: Autonomous Pure-Rust LLM Inference Orchestration & Safety Middleware", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -817,7 +817,7 @@ r#"# HARNESS: Official Verified Benchmark & Hardware Telemetry Report
 
 ## 1. Executive Summary & Quality Bounds
 
-HARNESS is an autonomous high-performance inference engine authored from first principles in 100% pure Rust. It introduces biologically inspired cortical lateral inhibition, leaky integrate-and-fire (LIF) sparse attention, hippocampal dual-memory consolidation, and deterministic finite automaton (DFA) constrained decoding.
+HARNESS is an autonomous high-performance inference orchestration and safety middleware authored in 100% pure Rust. It introduces biologically inspired cortical lateral inhibition, leaky integrate-and-fire (LIF) sparse attention, hippocampal dual-memory consolidation, entropy-gated adaptive speculative decoding, and deterministic finite automaton (DFA) constrained decoding.
 
 ### Verified Live Runtime Telemetry & Primitives Scorecard
 
