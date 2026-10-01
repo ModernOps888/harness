@@ -62,13 +62,17 @@ impl ObservationCompactor {
         if total_lines > self.max_head_lines + self.max_tail_lines {
             let middle = &lines[self.max_head_lines..total_lines - self.max_tail_lines];
             for line in middle {
-                let lower = line.to_lowercase();
-                if lower.contains("error")
-                    || lower.contains("fail")
-                    || lower.contains("fatal")
-                    || lower.contains("panic")
-                    || lower.contains("exception")
-                {
+                let bytes = line.as_bytes();
+                let has_signal = [b"error".as_slice(), b"fail".as_slice(), b"fatal".as_slice(), b"panic".as_slice(), b"exception".as_slice()]
+                    .iter()
+                    .any(|pattern| {
+                        if bytes.len() < pattern.len() {
+                            return false;
+                        }
+                        bytes.windows(pattern.len()).any(|w| w.eq_ignore_ascii_case(pattern))
+                    });
+
+                if has_signal {
                     error_lines.push(*line);
                     if error_lines.len() >= 10 {
                         break;

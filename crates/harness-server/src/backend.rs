@@ -143,6 +143,8 @@ pub struct OllamaChatRequest {
     pub messages: Vec<OllamaChatMessage>,
     pub stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_alive: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub options: Option<OllamaOptions>,
 }
 
@@ -206,6 +208,18 @@ pub struct OllamaModelTag {
     pub size: u64,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct OllamaPsResponse {
+    pub models: Vec<OllamaPsModel>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct OllamaPsModel {
+    pub name: String,
+    pub model: String,
+    pub size_vram: Option<u64>,
+}
+
 impl BackendProxy {
     pub fn new(config: BackendConfig) -> Self {
         let client = Client::builder()
@@ -214,6 +228,22 @@ impl BackendProxy {
             .unwrap_or_default();
 
         Self { config, client }
+    }
+
+    /// List models currently loaded and resident in memory on the backend
+    pub async fn running_models(&self) -> Vec<String> {
+        match self.config.backend_type {
+            BackendType::Ollama => {
+                let url = format!("{}/api/ps", self.config.base_url);
+                if let Ok(resp) = self.client.get(&url).send().await {
+                    if let Ok(ps) = resp.json::<OllamaPsResponse>().await {
+                        return ps.models.into_iter().map(|m| m.name).collect();
+                    }
+                }
+                vec![]
+            }
+            BackendType::OpenAICompatible => vec![],
+        }
     }
 
     /// List models currently available on the active backend
@@ -250,12 +280,33 @@ impl BackendProxy {
 
     /// Resolve requested model name against actual models installed on backend
     pub async fn resolve_model_smart(&self, requested: &str) -> String {
+        let req_clean = requested.trim().to_lowercase();
+
+        // 0. Active Resident Memory Check:
+        // If a model is ALREADY resident and active in memory (e.g. 70B loaded),
+        // and the user requested a generic placeholder ("qwen3.8-27b-isq", "default", "", "auto")
+        // or a model keyword matching what is already warm, REUSE IT immediately to prevent eviction thrashing!
+        let running = self.running_models().await;
+        if let Some(resident) = running.first() {
+            let res_clean = resident.to_lowercase();
+            if req_clean.is_empty()
+                || req_clean == "default"
+                || req_clean == "auto"
+                || req_clean.contains("27b")
+                || req_clean.contains("isq")
+                || (req_clean.contains("70b") && res_clean.contains("70b"))
+                || (req_clean.contains("llama") && res_clean.contains("llama"))
+                || (req_clean.contains("qwen") && res_clean.contains("qwen"))
+            {
+                return resident.clone();
+            }
+        }
+
         let available = self.list_models().await;
         if available.is_empty() {
             return self.config.resolve_model_name(requested);
         }
 
-        let req_clean = requested.trim().to_lowercase();
         // 1. Direct match
         if let Some(exact) = available.iter().find(|m| {
             let ml = m.to_lowercase();
@@ -291,7 +342,12 @@ impl BackendProxy {
             }
         }
 
-        // 3. First available installed model
+        // 3. Fallback to currently running model before any cold model
+        if let Some(resident) = running.first() {
+            return resident.clone();
+        }
+
+        // 4. First available installed model
         if let Some(first) = available.first() {
             return first.clone();
         }
@@ -322,6 +378,7 @@ impl BackendProxy {
                     model: resolved_model,
                     messages: chat_messages,
                     stream: false,
+                    keep_alive: Some("24h".to_string()),
                     options: Some(OllamaOptions {
                         temperature: Some(temperature),
                         top_p: None,
@@ -440,6 +497,7 @@ impl BackendProxy {
                     model: resolved_model,
                     messages: chat_messages,
                     stream: true,
+                    keep_alive: Some("24h".to_string()),
                     options: Some(OllamaOptions {
                         temperature: Some(temperature),
                         top_p: None,
