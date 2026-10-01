@@ -73,12 +73,56 @@ impl RadixPrefixCache {
         if tokens.is_empty() {
             return;
         }
+        Self::insert_node(&mut self.root, tokens, blocks, &mut self.total_cached_tokens);
+    }
+
+    fn insert_node(
+        node: &mut RadixNode,
+        tokens: &[u32],
+        blocks: &[BlockId],
+        total_cached: &mut usize,
+    ) {
+        if tokens.is_empty() {
+            return;
+        }
         let first_token = tokens[0];
-        self.root.children.insert(
-            first_token,
-            RadixNode::new(tokens.to_vec(), blocks.to_vec()),
-        );
-        self.total_cached_tokens += tokens.len();
+        if let Some(child) = node.children.get_mut(&first_token) {
+            let common_len = tokens
+                .iter()
+                .zip(child.token_seq.iter())
+                .take_while(|(&a, &b)| a == b)
+                .count();
+
+            if common_len == child.token_seq.len() {
+                Self::insert_node(child, &tokens[common_len..], blocks, total_cached);
+            } else {
+                let split_token = child.token_seq[common_len];
+                let mut new_child = RadixNode::new(
+                    child.token_seq[common_len..].to_vec(),
+                    std::mem::take(&mut child.blocks),
+                );
+                new_child.children = std::mem::take(&mut child.children);
+
+                child.token_seq.truncate(common_len);
+                child.children.insert(split_token, new_child);
+
+                if common_len < tokens.len() {
+                    let rem_first = tokens[common_len];
+                    let rem_node = RadixNode::new(
+                        tokens[common_len..].to_vec(),
+                        blocks.to_vec(),
+                    );
+                    child.children.insert(rem_first, rem_node);
+                    *total_cached += tokens.len() - common_len;
+                }
+            }
+        } else {
+            node.children.insert(
+                first_token,
+                RadixNode::new(tokens.to_vec(), blocks.to_vec()),
+            );
+            *total_cached += tokens.len();
+        }
     }
 
     pub fn total_cached_tokens(&self) -> usize {

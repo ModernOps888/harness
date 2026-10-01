@@ -78,6 +78,12 @@ impl TemporalLayerStreamer {
         kv_caches: &mut [KVCache],
         layer_runner: impl Fn(usize, &Tensor, usize, &mut KVCache) -> Result<Tensor>,
     ) -> Result<Tensor> {
+        if kv_caches.len() < self.total_layers {
+            return Err(harness_core::HarnessError::Attention(format!(
+                "Layer streamer requires {} KV cache layers, but only {} provided",
+                self.total_layers, kv_caches.len()
+            )));
+        }
         for (l, kv_cache) in kv_caches.iter_mut().enumerate().take(self.total_layers) {
             let (_active_slot, next_prefetch) = self.stage_layer(l);
 

@@ -21,19 +21,49 @@ impl TransformerBlock {
     pub fn forward(
         &self,
         x: &Tensor,
-        _start_pos: usize,
-        _kv_cache: &mut KVCache,
+        start_pos: usize,
+        kv_cache: &mut KVCache,
     ) -> Result<Tensor> {
         // 1. Input RMSNorm
         let normed = x.rms_norm(&self.input_norm_weight, self.eps)?;
 
         // 2. QKV Linear Projections
-        let q = normed.matmul(&self.q_proj)?;
-        let k = normed.matmul(&self.k_proj)?;
+        let mut q = normed.matmul(&self.q_proj)?;
+        let mut k = normed.matmul(&self.k_proj)?;
         let v = normed.matmul(&self.v_proj)?;
 
+        let num_tokens = x.shape().first().copied().unwrap_or(1);
+        let num_q_heads = self.attn_config.num_q_heads;
+        let num_kv_heads = self.attn_config.num_kv_heads;
+        let head_dim = self.attn_config.head_dim;
+
+        // Apply Rotary Position Embeddings (RoPE)
+        self.rope.apply(q.as_mut_f32_slice()?, start_pos, num_tokens, num_q_heads);
+        self.rope.apply(k.as_mut_f32_slice()?, start_pos, num_tokens, num_kv_heads);
+
+        // Reshape 2D [tokens, heads * dim] to 3D [tokens, heads, dim] for FlashAttention
+        let q_3d = if q.shape().len() == 2 {
+            q.reshape(vec![num_tokens, num_q_heads, head_dim])?
+        } else {
+            q
+        };
+        let k_3d = if k.shape().len() == 2 {
+            k.reshape(vec![num_tokens, num_kv_heads, head_dim])?
+        } else {
+            k
+        };
+        let v_3d = if v.shape().len() == 2 {
+            v.reshape(vec![num_tokens, num_kv_heads, head_dim])?
+        } else {
+            v
+        };
+
+        // Cache Key & Value representations
+        kv_cache.append(&k_3d, &v_3d)?;
+
         // 3. Flash Attention v3 (computes tiled attention)
-        let attn_out = flash_attention_v3(&q, &k, &v, &self.attn_config)?;
+        let attn_out_3d = flash_attention_v3(&q_3d, &k_3d, &v_3d, &self.attn_config)?;
+        let attn_out = attn_out_3d.reshape(vec![num_tokens, num_q_heads * head_dim])?;
 
         // 4. Output projection and residual connection
         let proj_out = attn_out.matmul(&self.o_proj)?;

@@ -26,8 +26,25 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
     let current_name = state.model_name.read().unwrap().clone();
     let config = state.model_config.read().unwrap().clone();
 
-    let models = vec![
-        ModelCard {
+    let backend_models: Vec<String> = state.backend.list_models().await;
+    let mut models = Vec::new();
+
+    for m in backend_models {
+        models.push(ModelCard {
+            id: m.clone(),
+            object: "model".into(),
+            created: 1727654400,
+            owned_by: "local-backend".into(),
+            architecture: "Transformer".into(),
+            quantization: "Native".into(),
+            context_length: config.max_position_embeddings,
+            hardware_tier: "Active Hardware Accelerated".into(),
+            sparse_routing: "Direct Execution".into(),
+        });
+    }
+
+    if !models.iter().any(|m| m.id == current_name) {
+        models.push(ModelCard {
             id: current_name,
             object: "model".into(),
             created: 1727654400,
@@ -37,7 +54,10 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             context_length: config.max_position_embeddings,
             hardware_tier: "Tier-2: 16GB GPU / 32GB RAM resident".into(),
             sparse_routing: "LIF Spiking Sparsity (adaptive thresholding)".into(),
-        },
+        });
+    }
+
+    models.extend(vec![
         ModelCard {
             id: "Llama-3.3-70B-LayerStream".into(),
             object: "model".into(),
@@ -93,7 +113,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             hardware_tier: "Tier-1: 8GB GPU / 16GB Mac UMA fully resident".into(),
             sparse_routing: "Dense System-1 fast intuitive inference".into(),
         },
-    ];
+    ]);
 
     Json(ModelListResponse {
         object: "list".into(),

@@ -12,6 +12,9 @@ impl EntropyDetector {
     /// Compute Shannon entropy over logit distribution: H(p) = - sum(p * log(p))
     pub fn compute_entropy(logits: &Tensor) -> Result<f32> {
         let logits_slice = logits.as_f32_slice()?;
+        if logits_slice.is_empty() {
+            return Ok(0.0);
+        }
         let max_logit = logits_slice.iter().copied().fold(f32::NEG_INFINITY, f32::max);
 
         let mut sum_exp = 0.0f32;
