@@ -114,7 +114,39 @@ impl HardwareProfile {
 fn detect_system_ram_gb() -> f32 {
     #[cfg(target_os = "windows")]
     {
-        // Default to workstation RAM baseline or read environment
+        #[repr(C)]
+        struct MEMORYSTATUSEX {
+            dw_length: u32,
+            dw_memory_load: u32,
+            ull_total_phys: u64,
+            ull_avail_phys: u64,
+            ull_total_page_file: u64,
+            ull_avail_page_file: u64,
+            ull_total_virtual: u64,
+            ull_avail_virtual: u64,
+            ull_avail_extended_virtual: u64,
+        }
+
+        extern "system" {
+            fn GlobalMemoryStatusEx(stat: *mut MEMORYSTATUSEX) -> i32;
+        }
+
+        let mut mem = MEMORYSTATUSEX {
+            dw_length: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+            dw_memory_load: 0,
+            ull_total_phys: 0,
+            ull_avail_phys: 0,
+            ull_total_page_file: 0,
+            ull_avail_page_file: 0,
+            ull_total_virtual: 0,
+            ull_avail_virtual: 0,
+            ull_avail_extended_virtual: 0,
+        };
+
+        let ok = unsafe { GlobalMemoryStatusEx(&mut mem) };
+        if ok != 0 && mem.ull_total_phys > 0 {
+            return (mem.ull_total_phys as f64 / (1024.0 * 1024.0 * 1024.0)) as f32;
+        }
         32.0
     }
     #[cfg(target_os = "linux")]
@@ -154,6 +186,26 @@ fn detect_accelerator(os: &str) -> (String, Device, f32) {
     if os == "macos" {
         let ram = detect_system_ram_gb();
         return (format!("Apple Silicon Metal Unified Memory ({:.0}GB UMA)", ram), Device::Metal(0), ram);
+    }
+
+    // Try dynamic nvidia-smi probe first for exact name and VRAM
+    if let Ok(output) = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(s) = std::str::from_utf8(&output.stdout) {
+                if let Some(line) = s.lines().next() {
+                    let parts: Vec<&str> = line.split(',').map(|p| p.trim()).collect();
+                    if parts.len() >= 2 {
+                        let gpu_name = parts[0].to_string();
+                        let vram_mb = parts[1].parse::<f32>().unwrap_or(8192.0);
+                        let vram_gb = (vram_mb / 1024.0 * 10.0).round() / 10.0;
+                        return (gpu_name, Device::Cuda(0), vram_gb);
+                    }
+                }
+            }
+        }
     }
 
     // Check for NVIDIA CUDA presence via environment or driver paths

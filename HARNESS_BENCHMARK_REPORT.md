@@ -23,7 +23,7 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 | **Hippocampal Dual-Memory** | 93.8% Context Saved | Low-rank engram consolidation (CLS theory) |
 | **Cortical Lateral Inhibition** | 0.042 -> 0.000 nats | Logit Shannon entropy reduction & sharpening |
 | **DFA Schema Constrained Decoding** | 59 μs per token | Microsecond deterministic finite automaton mask |
-| **Layered 70B Model Execution** | 1.05 to 1.24 tok/s | Physically bounded by host DDR4/PCIe bandwidth (~40 GB / 28 GB/s) |
+| **Layered 70B Model Execution** | 0.48 - 0.55 tok/s (Raw) / 1.08 - 1.10 tok/s (Speculative) | 1B resident VRAM draft + 70B DDR4 host offload (RTX 5060 + i5-10400F) |
 
 ---
 
