@@ -44,12 +44,15 @@ impl TokenSampler {
 
         // 1. Apply repetition penalty
         if (config.repetition_penalty - 1.0).abs() > 1e-4 {
+            let mut seen = std::collections::HashSet::new();
             for &tok in generated_history {
-                if let Some((_, logit)) = filtered.get_mut(tok as usize) {
-                    if *logit > 0.0 {
-                        *logit /= config.repetition_penalty;
-                    } else {
-                        *logit *= config.repetition_penalty;
+                if seen.insert(tok) {
+                    if let Some((_, logit)) = filtered.get_mut(tok as usize) {
+                        if *logit > 0.0 {
+                            *logit /= config.repetition_penalty;
+                        } else {
+                            *logit *= config.repetition_penalty;
+                        }
                     }
                 }
             }
@@ -81,6 +84,11 @@ impl TokenSampler {
 
         // 5. Softmax
         let max_logit = filtered.iter().map(|(_, l)| *l).fold(f32::NEG_INFINITY, f32::max);
+        if max_logit == f32::NEG_INFINITY {
+            return Err(harness_core::HarnessError::ConstrainedDecoding(
+                "No valid tokens remain after applying constraints and masks".into(),
+            ));
+        }
         let mut sum_exp = 0.0f32;
         let mut probs: Vec<(usize, f32)> = filtered
             .iter()

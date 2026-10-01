@@ -1,6 +1,5 @@
 use harness_attention::PagedAttentionManager;
-use harness_core::{DType, Device, ModelConfig, Tensor};
-use harness_pipeline::{BatchedInferenceEngine, GenerationRequest, SamplingConfig, TokenSampler};
+use harness_core::{Device, Tensor};
 use harness_quant::QuantizedQ4Tensor;
 use harness_safety::{ConfidenceScorer, ConstrainedDecoder, EntropyDetector, SchemaGrammar};
 use uuid::Uuid;
@@ -11,9 +10,9 @@ fn test_paged_attention_allocation_and_fragmentation() {
     let req_id = Uuid::new_v4();
 
     // Allocate 3 blocks
-    let b1 = manager.allocate_block(req_id).unwrap();
-    let b2 = manager.allocate_block(req_id).unwrap();
-    let b3 = manager.allocate_block(req_id).unwrap();
+    let _b1 = manager.allocate_block(req_id).unwrap();
+    let _b2 = manager.allocate_block(req_id).unwrap();
+    let _b3 = manager.allocate_block(req_id).unwrap();
 
     assert_eq!(manager.get_block_table(&req_id).unwrap().len(), 3);
     assert!(manager.memory_fragmentation_ratio() < 0.05);

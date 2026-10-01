@@ -22,7 +22,14 @@ impl CausalLM for Qwen3Model {
         let emb_slice = self.token_embedding.as_f32_slice()?;
 
         for (i, &tok) in token_ids.iter().enumerate() {
-            let offset = (tok as usize % self.config.vocab_size) * hidden_dim;
+            let tok_idx = tok as usize;
+            if tok_idx >= self.config.vocab_size {
+                return Err(harness_core::HarnessError::InvalidShape(format!(
+                    "Token ID {} exceeds model vocabulary size {}",
+                    tok, self.config.vocab_size
+                )));
+            }
+            let offset = tok_idx * hidden_dim;
             let src = &emb_slice[offset..offset + hidden_dim];
             let dst = &mut out[i * hidden_dim..(i + 1) * hidden_dim];
             dst.copy_from_slice(src);

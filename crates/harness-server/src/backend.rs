@@ -468,16 +468,16 @@ impl BackendProxy {
                 // Ollama streams newline-delimited JSON
                 use futures_util::StreamExt;
                 let mut stream = resp.bytes_stream();
-                let mut buffer = String::new();
+                let mut byte_buffer = Vec::new();
 
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(bytes) => {
-                            buffer.push_str(&String::from_utf8_lossy(&bytes));
+                            byte_buffer.extend_from_slice(&bytes);
                             // Process complete JSON lines
-                            while let Some(newline_pos) = buffer.find('\n') {
-                                let line = buffer[..newline_pos].trim().to_string();
-                                buffer = buffer[newline_pos + 1..].to_string();
+                            while let Some(newline_pos) = byte_buffer.iter().position(|&b| b == b'\n') {
+                                let line_bytes: Vec<u8> = byte_buffer.drain(..=newline_pos).collect();
+                                let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
 
                                 if line.is_empty() { continue; }
 
@@ -546,15 +546,15 @@ impl BackendProxy {
 
                 use futures_util::StreamExt;
                 let mut stream = resp.bytes_stream();
-                let mut buffer = String::new();
+                let mut byte_buffer = Vec::new();
 
                 while let Some(chunk_result) = stream.next().await {
                     match chunk_result {
                         Ok(bytes) => {
-                            buffer.push_str(&String::from_utf8_lossy(&bytes));
-                            while let Some(newline_pos) = buffer.find('\n') {
-                                let line = buffer[..newline_pos].trim().to_string();
-                                buffer = buffer[newline_pos + 1..].to_string();
+                            byte_buffer.extend_from_slice(&bytes);
+                            while let Some(newline_pos) = byte_buffer.iter().position(|&b| b == b'\n') {
+                                let line_bytes: Vec<u8> = byte_buffer.drain(..=newline_pos).collect();
+                                let line = String::from_utf8_lossy(&line_bytes).trim().to_string();
 
                                 if !line.starts_with("data: ") { continue; }
                                 let json_str = &line[6..];

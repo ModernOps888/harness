@@ -26,3 +26,7 @@ chrono = { workspace = true }
 serde_json = { workspace = true }
 colored = "2.1"
 rand = { workspace = true }
+
+[[test]]
+name = "integration_test"
+path = "../../tests/integration_test.rs"

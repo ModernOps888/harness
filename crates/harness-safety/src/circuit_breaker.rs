@@ -56,7 +56,8 @@ impl AgentCircuitBreaker {
         };
 
         self.history.push_back(record);
-        if self.history.len() > 16 {
+        let max_history = self.max_consecutive_failures.max(self.max_duplicate_actions).max(16);
+        if self.history.len() > max_history {
             self.history.pop_front();
         }
 

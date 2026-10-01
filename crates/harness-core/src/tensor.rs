@@ -115,6 +115,34 @@ impl Tensor {
         unsafe { Ok(std::slice::from_raw_parts(f32_ptr, self.numel())) }
     }
 
+    pub fn as_mut_f32_slice(&mut self) -> Result<&mut [f32]> {
+        if self.dtype != DType::F32 {
+            return Err(HarnessError::UnsupportedDTypeConversion {
+                from: self.dtype,
+                to: DType::F32,
+            });
+        }
+        let byte_len = self.numel().checked_mul(4).ok_or_else(|| {
+            HarnessError::InvalidShape("Tensor size arithmetic overflow in byte calculation".into())
+        })?;
+        if self.offset.checked_add(byte_len).is_none_or(|end| end > self.data.len()) {
+            return Err(HarnessError::InvalidShape(format!(
+                "Offset {} + byte length {} exceeds buffer size {}",
+                self.offset, byte_len, self.data.len()
+            )));
+        }
+        let data = Arc::make_mut(&mut self.data);
+        let slice = &mut data[self.offset..self.offset + byte_len];
+        let ptr = slice.as_mut_ptr();
+        if !(ptr as usize).is_multiple_of(std::mem::align_of::<f32>()) {
+            return Err(HarnessError::InvalidShape(
+                "Buffer is not 4-byte aligned for safe f32 slice casting".into(),
+            ));
+        }
+        let f32_ptr = ptr as *mut f32;
+        unsafe { Ok(std::slice::from_raw_parts_mut(f32_ptr, self.numel())) }
+    }
+
     /// Reshape tensor (must have same total number of elements)
     pub fn reshape(&self, new_shape: Shape) -> Result<Self> {
         let new_numel: usize = new_shape.iter().product();
@@ -192,6 +220,15 @@ impl Tensor {
         let x = self.as_f32_slice()?;
         let w = weight.as_f32_slice()?;
         let hidden_dim = *self.shape.last().unwrap_or(&1);
+        if hidden_dim == 0 || self.numel() == 0 {
+            return Err(HarnessError::InvalidShape("Cannot perform RMSNorm on zero-sized tensor".into()));
+        }
+        if w.len() < hidden_dim {
+            return Err(HarnessError::ShapeMismatch {
+                expected: vec![hidden_dim],
+                found: weight.shape().to_vec(),
+            });
+        }
         let _num_tokens = self.numel() / hidden_dim;
 
         let mut out = vec![0.0f32; self.numel()];

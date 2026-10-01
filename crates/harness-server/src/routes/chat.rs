@@ -158,8 +158,9 @@ fn compact_messages(messages: &[ChatMessage], max_full_turns: usize) -> Vec<(Str
         for (i, msg) in non_system.iter().enumerate() {
             if i < cutoff {
                 // Compact: keep first 200 chars
-                let compacted = if msg.content.len() > 200 {
-                    format!("{}...", &msg.content[..200])
+                let compacted = if msg.content.chars().count() > 200 {
+                    let truncated: String = msg.content.chars().take(200).collect();
+                    format!("{}...", truncated)
                 } else {
                     msg.content.clone()
                 };

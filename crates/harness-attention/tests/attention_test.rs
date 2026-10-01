@@ -104,3 +104,57 @@ fn test_paged_attention_exact_fragmentation_and_churn() {
     assert_eq!(manager2.free_block_count(), 100);
     assert_eq!(manager2.memory_fragmentation_ratio(), 0.0);
 }
+
+#[test]
+fn test_kv_cache_append_and_memory_persistence() {
+    use harness_attention::{KVCache, KVCacheCompression};
+    use harness_core::{Device, Tensor};
+
+    let mut cache = KVCache::new(1, 2, 4, 16, Device::Cpu, KVCacheCompression::None).unwrap();
+    assert_eq!(cache.current_len, 0);
+
+    // Create new K and V tokens for 2 tokens (2 tokens * 2 heads * 4 dim = 16 floats each)
+    let k_data: Vec<f32> = (1..=16).map(|v| v as f32).collect();
+    let v_data: Vec<f32> = (17..=32).map(|v| v as f32).collect();
+
+    let k_new = Tensor::from_f32_slice(&k_data, vec![2, 2, 4], Device::Cpu).unwrap();
+    let v_new = Tensor::from_f32_slice(&v_data, vec![2, 2, 4], Device::Cpu).unwrap();
+
+    cache.append(&k_new, &v_new).unwrap();
+    assert_eq!(cache.current_len, 2);
+
+    let k_slice = cache.k.as_f32_slice().unwrap();
+    let v_slice = cache.v.as_f32_slice().unwrap();
+
+    assert_eq!(&k_slice[0..16], &k_data[..]);
+    assert_eq!(&v_slice[0..16], &v_data[..]);
+    // The rest of the buffer remains 0
+    assert_eq!(k_slice[16], 0.0);
+    assert_eq!(v_slice[16], 0.0);
+}
+
+#[test]
+fn test_radix_prefix_cache_branch_splitting() {
+    use harness_attention::RadixPrefixCache;
+    let mut cache = RadixPrefixCache::new();
+
+    // Insert prefix 1: [1, 2, 3] -> [10]
+    cache.insert(&[1, 2, 3], &[10]);
+
+    // Insert prefix 2: [1, 2, 4] -> [20] (shares [1, 2])
+    cache.insert(&[1, 2, 4], &[20]);
+
+    // Query 1: should match [1, 2, 3]
+    let (match1_len, blocks1) = cache.match_prefix(&[1, 2, 3, 99]);
+    assert_eq!(match1_len, 3);
+    assert_eq!(blocks1, vec![10]);
+
+    // Query 2: should match [1, 2, 4]
+    let (match2_len, blocks2) = cache.match_prefix(&[1, 2, 4, 100]);
+    assert_eq!(match2_len, 3);
+    assert_eq!(blocks2, vec![20]);
+
+    // Query 3: partial match [1, 2, 5] should match prefix of length 2 ([1, 2])
+    let (match3_len, _blocks3) = cache.match_prefix(&[1, 2, 5]);
+    assert_eq!(match3_len, 2);
+}
