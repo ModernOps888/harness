@@ -38,7 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -u 10001 -m harness
 
 # Copy backend compiled executable
 COPY --from=backend-builder /app/target/release/harness-cli /usr/local/bin/harness
@@ -46,9 +47,13 @@ COPY --from=backend-builder /app/target/release/harness-cli /usr/local/bin/harne
 # Copy frontend distribution
 COPY --from=frontend-builder /app/frontend/dist /app/static
 
+RUN chown -R harness:harness /app
+
 ENV RUST_LOG=info
 ENV HARNESS_HOST=0.0.0.0
 ENV HARNESS_PORT=8080
+
+USER harness
 
 EXPOSE 8080
 

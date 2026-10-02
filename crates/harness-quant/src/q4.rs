@@ -24,7 +24,7 @@ impl QuantizedQ4Tensor {
     pub fn from_f32_tensor(tensor: &Tensor) -> Result<Self> {
         let f32_data = tensor.as_f32_slice()?;
         let numel = f32_data.len();
-        let num_blocks = (numel + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        let num_blocks = numel.div_ceil(BLOCK_SIZE);
 
         let mut blocks = vec![
             Q4Block {

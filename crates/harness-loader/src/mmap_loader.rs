@@ -120,7 +120,10 @@ impl MmapModelLoader {
             .get(name)
             .ok_or_else(|| HarnessError::ModelLoad(format!("Tensor {} not found in weights", name)))?;
 
-        let end = meta.byte_offset + meta.byte_len;
+        let end = meta
+            .byte_offset
+            .checked_add(meta.byte_len)
+            .ok_or_else(|| HarnessError::ModelLoad("Weight offset integer overflow".into()))?;
         if end > self.mmap.len() {
             return Err(HarnessError::ModelLoad("Weight offset exceeds file boundary".into()));
         }

@@ -92,7 +92,7 @@ pub struct GpuQ4Tensor {
 impl GpuQ4Tensor {
     /// Create GpuQ4Tensor from pre-quantized GPU blocks
     pub fn from_blocks(ctx: &GpuContext, blocks: &[Q4BlockGpu], k: usize, n: usize) -> Result<Self> {
-        let blocks_per_col = (k + 31) / 32;
+        let blocks_per_col = k.div_ceil(32);
         let expected_blocks = n * blocks_per_col;
         if blocks.len() != expected_blocks {
             return Err(HarnessError::InvalidShape(format!(
@@ -131,7 +131,7 @@ impl GpuQ4Tensor {
             )));
         }
 
-        let blocks_per_col = (k + 31) / 32;
+        let blocks_per_col = k.div_ceil(32);
         let mut blocks = Vec::with_capacity(n * blocks_per_col);
 
         for col in 0..n {
@@ -163,7 +163,7 @@ impl GpuQ4Tensor {
 
                 let mut qs = [0u32; 4];
 
-                for chunk_idx in 0..4 {
+                for (chunk_idx, q_chunk) in qs.iter_mut().enumerate() {
                     let mut packed_u32 = 0u32;
                     for nibble_idx in 0..8 {
                         let ki = start_k + chunk_idx * 8 + nibble_idx;
@@ -175,7 +175,7 @@ impl GpuQ4Tensor {
                         };
                         packed_u32 |= q << (nibble_idx * 4);
                     }
-                    qs[chunk_idx] = packed_u32;
+                    *q_chunk = packed_u32;
                 }
 
                 blocks.push(Q4BlockGpu {
@@ -355,8 +355,8 @@ impl GpuTensor {
             });
             cpass.set_pipeline(&ctx.gemm_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            let gx = ((n as u32) + 15) / 16;
-            let gy = ((m as u32) + 15) / 16;
+            let gx = (n as u32).div_ceil(16);
+            let gy = (m as u32).div_ceil(16);
             cpass.dispatch_workgroups(gx, gy, 1);
         }
 
@@ -490,7 +490,7 @@ impl GpuTensor {
             });
             cpass.set_pipeline(&ctx.swiglu_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
-            let gx = ((self.numel as u32) + 255) / 256;
+            let gx = (self.numel as u32).div_ceil(256);
             cpass.dispatch_workgroups(gx, 1, 1);
         }
 
@@ -558,7 +558,7 @@ impl GpuTensor {
             cpass.set_pipeline(&ctx.rope_pipeline);
             cpass.set_bind_group(0, &bind_group, &[]);
             let total_pairs = (num_tokens * num_heads * (head_dim / 2)) as u32;
-            let gx = (total_pairs + 255) / 256;
+            let gx = total_pairs.div_ceil(256);
             cpass.dispatch_workgroups(gx, 1, 1);
         }
 
@@ -655,7 +655,7 @@ impl GpuTensor {
         }
 
         let n = weight.n;
-        let blocks_per_col = (k + 31) / 32;
+        let blocks_per_col = k.div_ceil(32);
         let out = Self::empty(ctx, vec![1, n])?;
 
         let dims = Q4GemvUniform {
