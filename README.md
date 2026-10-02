@@ -33,8 +33,6 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 | **Hippocampal Dual-Memory** | **>90%** context saved | Volatile episodic buffer + low-rank engram consolidation |
 | **Backend Integration (Ollama / llama.cpp)** | **78.1 - 80.0 tok/s** (7B in VRAM) | Direct proxy & telemetry interception of underlying engine |
 | **70B Raw Hardware Execution (7.5GB VRAM)** | **1.00 - 1.05 tok/s** (22 layers on GPU) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`), 7.51 GB VRAM + 18.0 GB DDR4 RAM |
-| **MoE 6GB VRAM Memory Cache Model** | **3.81 - 4.16 tok/s** (Analytical Model) | Sizing & PCIe bus traffic simulation (86% bandwidth reduction); Not physical weight forward pass |
-| **70B Layer-Streaming State Machine** | Proof-of-Concept / Simulation | Dual-buffered ping-pong scheduling state machine over 80 layers |
 
 ---
 
@@ -43,62 +41,25 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 Model throughput is strictly bounded by physical interconnect bandwidth:
 $$\text{Max Throughput (tok/s)} \le \frac{\text{Memory Bandwidth (GB/s)}}{\text{Active Model Footprint (GB)}}$$
 
-| Hardware Tier | Memory Topology | Supported Models | Execution Strategy | Measured / Expected Throughput |
+### Verified Bare-Metal Execution (Tested on this PC: RTX 5060 8GB / 32GB DDR4)
+
+| Hardware Setup | Memory Topology | Models Verified on Bare Metal | Execution Strategy | Measured Physical Throughput |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier-1: Consumer Edge** | 8GB VRAM GPU / 16-32GB Host RAM | 8B Dense (Resident)<br>70B Dense (Layer-Stream / Hybrid Offload) | Double-buffered PCIe Gen4 DMA + Hybrid Host RAM Offload | **1.00 - 1.05 tok/s (70B Raw Autoregressive)**<br>**70 - 115 tok/s (8B Dense)** |
-| **Tier-1 MoE: Consumer Edge** | 8GB VRAM GPU / 32GB Host RAM | 109B Sparse MoE (Llama 4 Scout, 17B active) | MoE dynamic active expert routing over PCIe | **2.5 - 3.5 tok/s (109B MoE)** |
-| **Tier-2: Mid-Range Workstation** | 16GB - 24GB VRAM GPU / 32GB - 64GB RAM | 27B - 32B Dense (Resident)<br>70B Dense (Hybrid Stream) | Full KV-cache in VRAM, active layer weight double-buffering | **3.5 - 6.0 tok/s (70B Dense)**<br>**55 - 75 tok/s (27B Dense)** |
-| **Tier-3 UMA: Apple Silicon Mac (36GB - 48GB)** | 36GB - 48GB Unified RAM (M3/M4 Pro) | 70B Dense (Resident Q4_K_M) | 100% zero-copy unified memory (150-273 GB/s bus) | **6 - 9 tok/s (70B Dense)** |
-| **Tier-4 UMA: Apple Silicon Mac (96GB - 128GB+)** | 96GB - 128GB+ Unified RAM (M2/M3/M4 Max & Ultra) | **70B Dense Resident**<br>or **DeepSeek R1 671B Sparse MoE** | Multi-instance parallel execution in RAM (800 - 1,092 GB/s bus) | **18 - 24 tok/s (70B Dense)**<br>**20 - 28 tok/s (671B MoE)** |
+| **Local Bare-Metal Host** | **NVIDIA RTX 5060 8GB GDDR7 / 32GB DDR4** | **`Meta-Llama-3.1-70B-Instruct-Q2_K`**<br>(70.55B Parameters, 26.37 GB on disk) | Hybrid Offload (22 layers in GPU VRAM, 59 layers in DDR4 RAM) | **1.00 - 1.05 tok/s**<br>(**1.047 tok/s Measured**) |
+| **Local Bare-Metal Host** | **NVIDIA RTX 5060 8GB GDDR7** | **`Qwen2.5-Coder-7B-Instruct-Q4_K_M`**<br>(7.61B Parameters, 4.68 GB on disk) | 100% GPU VRAM Resident | **78.1 - 80.0 tok/s**<br>(**79.4 tok/s Measured**) |
 
-### Clarification on Proof-of-Concept vs Full Model Weights
-- **`harness stream70b`**: Executes the real physical weights of `llama3.1:70b-instruct-q2_K` on bare metal. In pure autoregressive mode with `--gpu-layers 22`, it offloads 22 layers (7.51 GB VRAM) onto the RTX 5060 and 59 layers (18.0 GB) into host DDR4 RAM, measuring a live **1.00 - 1.05 tok/s** (1.047 tok/s measured, bounded by the ~20 GB/s DDR4 memory bus). Zero simulations or approximations.
-- **Full Model Weight Inference**: When running complete weights via local backends (e.g. `llama3.1:70b-instruct-q2_K` at 26.37 GB), streaming weights across host DDR4/PCIe results in **~0.48 - 0.55 tok/s** baseline (16 layers offloaded). By maximizing GPU offload to 22 layers (7.51 GB VRAM), throughput rises to **1.00 - 1.05 tok/s** raw, verified live on physical hardware (RTX 5060 8GB + i5-10400F 32GB RAM). Claims of 15-24 tok/s apply to high-bandwidth Apple Silicon unified memory (800+ GB/s bus), not consumer discrete PCIe buses.
+### Theoretical Hardware Sizing: Apple Silicon Unified Memory Architecture (UMA)
+*(Note: Apple Silicon numbers below are theoretical physics calculations based on bus bandwidth $\frac{\text{Bandwidth}}{\text{Model Size}}$; they were not tested on this PC)*
 
-### The Physics of Apple Silicon Unified Memory (UMA) vs Discrete PCIe GPUs
+| Architecture Tier | Unified Memory Pool | Memory Bandwidth | Theoretical 70B Speed Cap |
+| :--- | :--- | :--- | :--- |
+| **M3 / M4 Pro** | 36GB - 48GB Unified RAM | 150 - 273 GB/s | **6 - 9 tok/s** (Theoretical Bandwidth Limit) |
+| **M3 / M4 Max** | 48GB - 64GB Unified RAM | 300 - 546 GB/s | **8.5 - 11.2 tok/s** (Theoretical Bandwidth Limit) |
+| **M2 / M4 Ultra** | 128GB - 192GB Unified RAM | 800 - 1,092 GB/s | **18 - 24 tok/s** (Theoretical Bandwidth Limit) |
 
-1. **On PC with Discrete GPU**:
-   In standard PC architectures, model weights must travel across the PCIe Gen4 x16 bus (max bandwidth: ~28 to 31 GB/s). For a 70B parameter model at 4-bit (~38.5 GB), streaming every layer per token creates a physical bus ceiling. HARNESS overcomes this with asynchronous double-buffered ping-pong DMA: while layer $L_n$ executes in GPU VRAM, layer $L_{n+1}$ is already in-flight over PCIe.
-2. **On Apple Silicon Macs (M-Series)**:
-   Apple Silicon shares a unified physical memory pool between CPU and Metal GPU cores at staggering bandwidths:
-   * **M3 Pro / M4 Pro**: 150 - 273 GB/s
-   * **M3 Max / M4 Max**: 300 - 546 GB/s
-   * **M2 Ultra / M3 Ultra / M4 Ultra**: 800 - 1,092 GB/s
-   * **M5 Next-Gen**: Up to 1,300+ GB/s
-   
-   Because unified memory eliminates the PCIe bus entirely, **if you have 36GB+ RAM, the entire 70B model runs directly in RAM at full GPU Metal speed with zero host-to-device copy overhead**.
-3. **The 128GB Mac Advantage (Concurrency & Giant Sparse MoE)**:
-   A 70B model quantized to 4-bit (`Q4_K_M`) occupies only **38.5 GB** of memory (less than 32% of a 128GB Mac). This leaves over 85GB free, allowing you to:
-   * Run **2 to 3 distinct 70B instances concurrently in RAM** (for multi-agent debates, target-and-verifier drafting pairs, or parallel search).
-   * Expand the context window to **128k - 512k tokens** with zero memory paging.
-   * Run massive frontier **671B Sparse MoE models (DeepSeek R1 / V3)** using dynamic expert offload.
-
----
-
-## ⚡ The Mathematics of Sparsity Quadrupling ($4\times$ Speedup)
-
-When scaling inference on memory-constrained systems, sparse computation effectively **quadruples** compute throughput through three multiplicative factors:
-
-```
-+----------------------------------------------------------------------------------------------------+
-|                                    4X SPARSITY MULTIPLICATION                                      |
-+----------------------------------------------------------------------------------------------------+
-| 1. MoE Routing Sparsity:  256 total experts -> 8 active per token (96.8% parameter reduction)      |
-| 2. 2:4 Structured Sparsity: Hardware Tensor Core pruning cuts weight bandwidth by 50%              |
-| 3. LIF Spiking Attention: Membrane threshold theta >= 0.35 skips 74% of dense attention FLOPs      |
-| -------------------------------------------------------------------------------------------------- |
-| RESULT: Compute operations drop by 75% -> 4x effective processing throughput on consumer hardware |
-+----------------------------------------------------------------------------------------------------+
-```
-
-1. **Mixture-of-Experts (MoE) Activation Sparsity**:
-   In frontier architectures like DeepSeek R1/V3, the model holds 671B total parameters across 256 routed experts, but only **8 experts fire per token**. That means only **37B active parameters** are computed per token. You achieve frontier 671B reasoning quality while computing fewer FLOPs than a dense 70B model.
-2. **2:4 Structured Hardware Tensor Sparsity**:
-   Modern Tensor Cores support 2:4 structured sparsity: exactly 2 non-zero values exist in every 4-entry vector. This cuts weight memory bandwidth in half and doubles matrix multiplication throughput with near-zero perplexity degradation.
-3. **Leaky Integrate-and-Fire (LIF) Spiking Attention**:
-   Standard transformers evaluate $O(N^2)$ dense dot products for every key and query. HARNESS implements biological LIF dynamics:
-   $$\tau \frac{dV_m(t)}{dt} = -(V_m(t) - V_{\text{rest}}) + I_{\text{syn}}(t)$$
-   Attention values are only computed when membrane potential breaches dynamic threshold $\theta \ge 0.35$. Inactive keys emit zero spikes and are skipped, eliminating 70% to 75% of floating-point multiplications.
+### Clarification on Bare-Metal Execution vs Theoretical Upper Bounds
+- **`harness stream70b`**: Executes the real physical weights of `llama3.1:70b-instruct-q2_K` on bare metal. In pure autoregressive mode with `--gpu-layers 22`, it offloads 22 layers (7.51 GB VRAM) onto the RTX 5060 and 59 layers (18.0 GB) into host DDR4 RAM, measuring a live **1.00 - 1.05 tok/s** (1.047 tok/s measured, bounded by the ~19.5 GB/s DDR4 memory bus). Zero simulations or approximations.
+- **Physical Memory Wall**: In discrete PC architectures, offloaded weights reside in host DDR4 RAM. Evaluating 59 layers requires streaming 18.025 GB across the memory controller for every single token: $\frac{18.025\text{ GB}}{19.5\text{ GB/s}} = 0.924\text{ s} \implies \mathbf{1.08\text{ tok/s max ceiling}}$. Claims of 15-24 tok/s apply to high-bandwidth Apple Silicon unified memory (800+ GB/s bus), not consumer discrete PCIe/DDR4 PCs.
 
 ---
 
@@ -148,23 +109,6 @@ cargo run --release -p harness-cli -- code-check --code "{\"model\": \"llama-3-8
 Run Test-Time Compute reasoning:
 ```bash
 cargo run --release -p harness-cli -- reason --candidates 4
-```
-
-### Core 4: MoE 6GB VRAM Resident Backbone & Hot Expert Cache (`harness-cli moe-bench`)
-- **Overcoming the Discrete PCIe Bus Bottleneck**: Standard 70B dense models require streaming 24.5 GB to 38.5 GB across PCIe *every single token*, capping throughput to ~0.50 tok/s.
-- **Sparse MoE VRAM Partitioning**: Allocates a precise 6.0 GB budget on consumer 8GB GPUs:
-  - **1.49 GB (1,525 MB)**: Shared Attention Backbone (Q, K, V, O projections, LayerNorms, Embeddings, Routers) **100% pinned in VRAM**.
-  - **4.45 GB (4,452 MB)**: Resident Hot Expert Cache holding **53 hot experts** directly on the GPU (32 pinned primary domain experts + 21 dynamic secondary experts).
-  - **16.65 GB (17,052 MB)**: Pinned Host DDR4 RAM Pool holding remaining 203 cold experts.
-- **Analytical & Telemetry Results (Hardware Memory-System Simulation)**:
-  - *Grounded Execution Notice*: Demonstrates memory-system caching behavior and PCIe transfer sizing. Token text is streamed from live backend while expert routing and bus bandwidth are analytically modeled (not physical 48B weight tensor execution).
-  - **Cumulative Cache Hit Rate**: **34.8% - 38.0%** (modeled zero-copy GPU execution).
-  - **PCIe Bus Traffic**: Slashed from 24,560 MB/tok to **3,460 MB/tok** (**85.9% bus traffic eliminated**).
-  - **Projected Throughput**: **3.81 - 4.16 tok/s** based on physical 14 GB/s PCIe DMA bus constraints.
-
-Run the MoE 6GB VRAM benchmark:
-```bash
-cargo run --release -p harness-cli -- moe-bench --tokens 30
 ```
 
 ---
