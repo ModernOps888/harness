@@ -103,48 +103,51 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                  <tr className="hover:bg-slate-900/40">
-                    <td className="py-2.5 px-3 font-sans font-medium text-slate-200">PC with 8GB GPU</td>
-                    <td className="py-2.5 px-3 text-slate-400">PCIe 4.0 x16 DMA</td>
-                    <td className="py-2.5 px-3 text-slate-300">~25 to 28 GB/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">112 tok/s (VRAM)</td>
-                    <td className="py-2.5 px-3 text-amber-400">0.6 tok/s (DMA Stream)</td>
-                    <td className="py-2.5 px-3 text-rose-400">0.7 tok/s (Offloaded)</td>
+                  <tr className="hover:bg-slate-900/40 bg-emerald-950/20">
+                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-300">PC with RTX 5060 8GB (Verified Local)</td>
+                    <td className="py-2.5 px-3 text-slate-400">PCIe 4.0 x16 + DDR4-2666</td>
+                    <td className="py-2.5 px-3 text-slate-300">~19.5 GB/s DDR4</td>
+                    <td className="py-2.5 px-3 text-emerald-400 font-bold">79.4 tok/s (Verified VRAM)</td>
+                    <td className="py-2.5 px-3 text-emerald-400 font-bold">1.05 tok/s (Verified Bare-Metal)</td>
+                    <td className="py-2.5 px-3 text-slate-500">N/A (Exceeds Memory)</td>
                   </tr>
-                  <tr className="hover:bg-slate-900/40">
-                    <td className="py-2.5 px-3 font-sans font-medium text-slate-200">Mac M3/M4 Pro (24-36GB)</td>
+                  <tr className="hover:bg-slate-900/40 opacity-75">
+                    <td className="py-2.5 px-3 font-sans font-medium text-slate-300">Mac M3/M4 Pro (24-36GB)*</td>
                     <td className="py-2.5 px-3 text-slate-400">Unified Memory (Metal)</td>
                     <td className="py-2.5 px-3 text-slate-300">150 to 273 GB/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">30 to 45 tok/s</td>
-                    <td className="py-2.5 px-3 text-cyan-400">6 to 9 tok/s (Q3/Q2.5)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">30 to 45 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">6 to 9 tok/s (Theoretical)</td>
                     <td className="py-2.5 px-3 text-slate-500">Out of memory</td>
                   </tr>
-                  <tr className="hover:bg-slate-900/40">
-                    <td className="py-2.5 px-3 font-sans font-medium text-slate-200">Mac M3/M4 Max (48-64GB)</td>
+                  <tr className="hover:bg-slate-900/40 opacity-75">
+                    <td className="py-2.5 px-3 font-sans font-medium text-slate-300">Mac M3/M4 Max (48-64GB)*</td>
                     <td className="py-2.5 px-3 text-slate-400">Unified Memory (Metal)</td>
                     <td className="py-2.5 px-3 text-slate-300">300 to 400+ GB/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">40 to 60 tok/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">8.5 to 11.2 tok/s</td>
+                    <td className="py-2.5 px-3 text-cyan-400">40 to 60 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">8.5 to 11.2 tok/s (Theoretical)</td>
                     <td className="py-2.5 px-3 text-slate-500">Out of memory</td>
                   </tr>
-                  <tr className="hover:bg-slate-900/40">
-                    <td className="py-2.5 px-3 font-sans font-medium text-slate-200">Mac Studio M2 Ultra (128GB)</td>
+                  <tr className="hover:bg-slate-900/40 opacity-75">
+                    <td className="py-2.5 px-3 font-sans font-medium text-slate-300">Mac Studio M2 Ultra (128GB)*</td>
                     <td className="py-2.5 px-3 text-slate-400">Unified Memory (Metal)</td>
                     <td className="py-2.5 px-3 text-slate-300">800 GB/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">50 to 80 tok/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">14 to 18 tok/s</td>
-                    <td className="py-2.5 px-3 text-cyan-400">Native 8x22B MoE</td>
+                    <td className="py-2.5 px-3 text-cyan-400">50 to 80 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">14 to 18 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">Native 8x22B MoE (Theoretical)</td>
                   </tr>
-                  <tr className="hover:bg-slate-900/40 bg-emerald-950/20">
-                    <td className="py-2.5 px-3 font-sans font-bold text-emerald-300">Mac Studio Ultra (192-512GB)</td>
+                  <tr className="hover:bg-slate-900/40 opacity-75">
+                    <td className="py-2.5 px-3 font-sans font-medium text-slate-300">Mac Studio Ultra (192-512GB)*</td>
                     <td className="py-2.5 px-3 text-slate-400">Unified Memory (Metal)</td>
                     <td className="py-2.5 px-3 text-slate-300">800 to 1200+ GB/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">60 to 90 tok/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">20 to 24 tok/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">16 to 22 tok/s (Native 671B)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">60 to 90 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">20 to 24 tok/s (Theoretical)</td>
+                    <td className="py-2.5 px-3 text-cyan-400">16 to 22 tok/s (Theoretical)</td>
                   </tr>
                 </tbody>
               </table>
+              <div className="p-2 text-[10px] text-slate-400 bg-slate-900/60 border-t border-slate-800">
+                *Notice: On this PC (RTX 5060 8GB / 32GB DDR4), only 7B (79.4 tok/s in VRAM) and 70B (1.05 tok/s bare-metal offload) have been physically executed and verified. Apple Silicon metrics are theoretical memory bandwidth upper bounds (Bandwidth / Model Size).
+              </div>
             </div>
           </div>
         </div>

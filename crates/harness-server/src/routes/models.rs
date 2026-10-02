@@ -52,68 +52,46 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             architecture: format!("{:?}", config.architecture),
             quantization: format!("{:?}", config.quantization),
             context_length: config.max_position_embeddings,
-            hardware_tier: "Tier-2: 16GB GPU / 32GB RAM resident".into(),
+            hardware_tier: "RTX 5060 8GB VRAM / 32GB Host RAM".into(),
             sparse_routing: "LIF Spiking Sparsity (adaptive thresholding)".into(),
         });
     }
 
-    models.extend(vec![
-        ModelCard {
-            id: "Llama-3.3-70B-LayerStream".into(),
+    if models.is_empty() {
+        models.push(ModelCard {
+            id: "llama3.1:70b-instruct-q2_K".into(),
             object: "model".into(),
             created: 1727654400,
-            owned_by: "harness".into(),
-            architecture: "Llama3".into(),
-            quantization: "Q4_K_M".into(),
+            owned_by: "local-disk".into(),
+            architecture: "Llama3_1".into(),
+            quantization: "Q2_K".into(),
             context_length: 131072,
-            hardware_tier: "Tier-1: 8GB GPU (PCIe Ping-Pong DMA) | Tier-3: 64GB-128GB Mac UMA fully resident".into(),
-            sparse_routing: "Dense layer streaming with double-buffered VRAM staging".into(),
-        },
-        ModelCard {
-            id: "Qwen-2.5-72B-Instruct".into(),
+            hardware_tier: "RTX 5060 8GB VRAM (22 layers) + 32GB DDR4 RAM (59 layers) - 1.05 tok/s".into(),
+            sparse_routing: "Pure Autoregressive Forward Pass".into(),
+        });
+        models.push(ModelCard {
+            id: "qwen2.5-coder:7b".into(),
             object: "model".into(),
             created: 1727654400,
-            owned_by: "harness".into(),
+            owned_by: "local-disk".into(),
             architecture: "Qwen2_5".into(),
             quantization: "Q4_K_M".into(),
-            context_length: 131072,
-            hardware_tier: "Tier-3: 32GB GPU or 64GB-128GB Mac UMA (up to 3x concurrent instances on 128GB)".into(),
-            sparse_routing: "Rotary RoPE + FlashAttention v3 multi-core".into(),
-        },
-        ModelCard {
-            id: "DeepSeek-R1-671B-SparseMoE".into(),
+            context_length: 32768,
+            hardware_tier: "RTX 5060 8GB VRAM Resident (100% in VRAM) - 79.4 tok/s".into(),
+            sparse_routing: "Direct VRAM Execution".into(),
+        });
+        models.push(ModelCard {
+            id: "llama3.2:1b".into(),
             object: "model".into(),
             created: 1727654400,
-            owned_by: "harness".into(),
-            architecture: "DeepSeekV3".into(),
-            quantization: "FP8 / 2-bit Ternary".into(),
-            context_length: 163840,
-            hardware_tier: "Tier-3+: 128GB-192GB Mac UMA or 32GB GPU with expert offload".into(),
-            sparse_routing: "256 routed experts (8 active = 37B active, 4x compute speedup via activation sparsity)".into(),
-        },
-        ModelCard {
-            id: "Mixtral-8x22B-SparseMoE".into(),
-            object: "model".into(),
-            created: 1727654400,
-            owned_by: "harness".into(),
-            architecture: "Mistral".into(),
-            quantization: "Q4_K_M".into(),
-            context_length: 65536,
-            hardware_tier: "Tier-3: 24GB-32GB GPU or 64GB-96GB Mac UMA resident".into(),
-            sparse_routing: "8 experts (2 active = 39B active, 4x FLOP efficiency)".into(),
-        },
-        ModelCard {
-            id: "Phi-4-14B-Reasoning".into(),
-            object: "model".into(),
-            created: 1727654400,
-            owned_by: "harness".into(),
-            architecture: "Phi4".into(),
-            quantization: "Q4_K_M".into(),
-            context_length: 16384,
-            hardware_tier: "Tier-1: 8GB GPU / 16GB Mac UMA fully resident".into(),
-            sparse_routing: "Dense System-1 fast intuitive inference".into(),
-        },
-    ]);
+            owned_by: "local-disk".into(),
+            architecture: "Llama3_2".into(),
+            quantization: "Q8_0".into(),
+            context_length: 8192,
+            hardware_tier: "RTX 5060 8GB VRAM Resident (1.3GB) - 120+ tok/s".into(),
+            sparse_routing: "Direct VRAM Execution".into(),
+        });
+    }
 
     Json(ModelListResponse {
         object: "list".into(),

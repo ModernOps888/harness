@@ -14,7 +14,7 @@ export default function App() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showHardwareModal, setShowHardwareModal] = useState(false);
   const [hardware, setHardware] = useState<HardwareProfile | null>(null);
-  const [selectedModel, setSelectedModel] = useState('Qwen3.8-27B-ISQ');
+  const [selectedModel, setSelectedModel] = useState('llama3.1:70b-instruct-q2_K');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'task-prompt-1',
