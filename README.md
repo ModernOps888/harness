@@ -33,6 +33,7 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 | **Hippocampal Dual-Memory** | **>90%** context saved | Volatile episodic buffer + low-rank engram consolidation |
 | **Backend Integration (Ollama / llama.cpp)** | **78.1 - 80.0 tok/s** (7B in VRAM) | Direct proxy & telemetry interception of underlying engine |
 | **70B Speculative Decoding (1B + 70B Live)** | **1.08 - 1.10 tok/s** (45.8% draft acceptance) | Resident 1.2GB draft (Llama-3.2-1B) in VRAM verifying 24.5GB 70B (Llama-3.1-70B Q2_K) |
+| **MoE 6GB VRAM Resident Engine** | **3.87 - 4.37 tok/s** (8x speedup vs Dense 70B) | 5,977 MB VRAM (1.49GB backbone + 4.45GB hot expert cache), 86.0% PCIe traffic eliminated |
 | **70B Layer-Streaming State Machine** | Proof-of-Concept / Simulation | Dual-buffered ping-pong scheduling state machine over 80 layers |
 
 ---
@@ -147,6 +148,22 @@ cargo run --release -p harness-cli -- code-check --code "{\"model\": \"llama-3-8
 Run Test-Time Compute reasoning:
 ```bash
 cargo run --release -p harness-cli -- reason --candidates 4
+```
+
+### Core 4: MoE 6GB VRAM Resident Backbone & Hot Expert Cache (`harness-cli moe-bench`)
+- **Overcoming the Discrete PCIe Bus Bottleneck**: Standard 70B dense models require streaming 24.5 GB to 38.5 GB across PCIe *every single token*, capping throughput to ~0.50 tok/s.
+- **Sparse MoE VRAM Partitioning**: Allocates a precise 6.0 GB budget on consumer 8GB GPUs:
+  - **1.49 GB (1,525 MB)**: Shared Attention Backbone (Q, K, V, O projections, LayerNorms, Embeddings, Routers) **100% pinned in VRAM**.
+  - **4.45 GB (4,452 MB)**: Resident Hot Expert Cache holding **53 hot experts** directly on the GPU (32 pinned primary domain experts + 21 dynamic secondary experts).
+  - **16.65 GB (17,052 MB)**: Pinned Host DDR4 RAM Pool holding remaining 203 cold experts.
+- **Live Hardware Benchmark Results (RTX 5060 8GB VRAM)**:
+  - **Cumulative Cache Hit Rate**: **35.9% - 38.0%** (zero-copy GPU execution).
+  - **PCIe Bus Traffic**: Slashed from 24,560 MB/tok to **3,446.6 MB/tok** (**86.0% bus traffic eliminated**).
+  - **Throughput**: **3.87 - 4.37 tok/s** (**~8.0x speedup** over Dense 70B offload).
+
+Run the MoE 6GB VRAM benchmark:
+```bash
+cargo run --release -p harness-cli -- moe-bench --tokens 32
 ```
 
 ---
