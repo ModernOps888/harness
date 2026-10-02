@@ -58,6 +58,19 @@ pub async fn report_handler() -> (axum::http::StatusCode, [(&'static str, &'stat
     )
 }
 
+pub async fn proof_handler() -> (axum::http::StatusCode, [(&'static str, &'static str); 1], String) {
+    let proof_content = match std::fs::read_to_string("raw_70b_hardware_execution_proof.json") {
+        Ok(content) => content,
+        Err(_) => r#"{"status": "no_proof_on_disk"}"#.to_string(),
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        [("Content-Type", "application/json; charset=utf-8")],
+        proof_content,
+    )
+}
+
 
 pub async fn metrics_handler(State(state): State<AppState>) -> Json<EngineMetrics> {
     let uptime = state.start_time.elapsed().as_secs();
