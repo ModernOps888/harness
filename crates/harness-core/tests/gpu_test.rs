@@ -50,7 +50,7 @@ fn test_native_gpu_gemm_accuracy() {
     let c_gpu = a_gpu.matmul(&ctx, &b_gpu).unwrap();
     let c_res = c_gpu.to_vec(&ctx).unwrap();
 
-    let expected = vec![31.0f32, 19.0, 85.0, 55.0];
+    let expected = [31.0f32, 19.0, 85.0, 55.0];
     assert_eq!(c_res.len(), expected.len());
     for (actual, exp) in c_res.iter().zip(expected.iter()) {
         assert!((actual - exp).abs() < 1e-4, "Expected {}, got {}", exp, actual);
@@ -140,7 +140,7 @@ fn test_native_gpu_gemv_accuracy() {
     let y_gpu = x_gpu.gemv(&ctx, &w_gpu).unwrap();
     let y_res = y_gpu.to_vec(&ctx).unwrap();
 
-    let expected = vec![7.0f32, 4.5, 11.5];
+    let expected = [7.0f32, 4.5, 11.5];
     assert_eq!(y_res.len(), expected.len());
     for (actual, exp) in y_res.iter().zip(expected.iter()) {
         assert!((actual - exp).abs() < 1e-4, "Expected {}, got {}", exp, actual);
@@ -162,15 +162,8 @@ fn test_native_gpu_gemv_q4_accuracy() {
     // K = 64 (2 blocks of 32), N = 2 columns
     let k = 64;
     let n = 2;
-    let mut x_data = vec![0.0f32; k];
-    for i in 0..k {
-        x_data[i] = ((i as f32) * 0.1).sin();
-    }
-
-    let mut w_data = vec![0.0f32; k * n];
-    for i in 0..(k * n) {
-        w_data[i] = ((i as f32) * 0.05).cos();
-    }
+    let x_data: Vec<f32> = (0..k).map(|i| ((i as f32) * 0.1).sin()).collect();
+    let w_data: Vec<f32> = (0..(k * n)).map(|i| ((i as f32) * 0.05).cos()).collect();
 
     let x_gpu = GpuTensor::from_f32_slice(&ctx, &x_data, vec![1, k]).unwrap();
     let w_q4 = GpuQ4Tensor::from_f32_matrix(&ctx, &w_data, k, n).unwrap();
@@ -182,7 +175,7 @@ fn test_native_gpu_gemv_q4_accuracy() {
     println!("GPU Q4 GEMV Result: {:?}", y_res);
 
     // Compute exact CPU dequantized dot product
-    let blocks_per_col = (k + 31) / 32;
+    let blocks_per_col = k.div_ceil(32);
     // We can re-extract the dequantized weights for each column
     let mut expected_dequant = vec![0.0f32; n];
     for col in 0..n {

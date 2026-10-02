@@ -12,7 +12,7 @@ fn test_nf4_quantization_snr_and_compression() {
     // Generate normal-like values in [-2.5, 2.5]
     let values: Vec<f32> = (0..numel)
         .map(|i| {
-            let x = (i as f32) / (numel as f32) * 6.28318;
+            let x = (i as f32) / (numel as f32) * std::f32::consts::TAU;
             (x.sin() + 0.5 * (x * 2.0).cos()) * 1.5
         })
         .collect();

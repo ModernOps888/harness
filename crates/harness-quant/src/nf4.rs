@@ -2,6 +2,7 @@ use harness_core::{Device, Result, Shape, Tensor};
 use rayon::prelude::*;
 
 // Standard 16 NF4 quantization bin centers
+#[allow(clippy::excessive_precision)]
 pub const NF4_BINS: [f32; 16] = [
     -1.0,
     -0.6961928009986877,
@@ -27,7 +28,7 @@ pub fn quantize_nf4(tensor: &Tensor) -> Result<(Vec<u8>, f32)> {
     let scale = if max_abs > 1e-8 { max_abs } else { 1.0 };
     let inv_scale = 1.0 / scale;
 
-    let num_bytes = (data.len() + 1) / 2;
+    let num_bytes = data.len().div_ceil(2);
     let mut packed = vec![0u8; num_bytes];
 
     packed.par_iter_mut().enumerate().for_each(|(byte_idx, byte)| {

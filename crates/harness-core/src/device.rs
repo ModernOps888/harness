@@ -115,6 +115,7 @@ fn detect_system_ram_gb() -> f32 {
     #[cfg(target_os = "windows")]
     {
         #[repr(C)]
+        #[allow(non_camel_case_types, clippy::upper_case_acronyms)]
         struct MEMORYSTATUSEX {
             dw_length: u32,
             dw_memory_load: u32,

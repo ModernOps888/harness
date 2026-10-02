@@ -458,7 +458,7 @@ impl McpServer {
 
                 // Shannon byte entropy for normal source code falls between 1.2 and 4.8 nats.
                 // Low entropy indicates repetitive loops; high entropy indicates noise or binary corruption.
-                let is_anomalous = code.len() > 20 && (byte_entropy < 1.0 || byte_entropy > 5.0);
+                let is_anomalous = code.len() > 20 && !(1.0..=5.0).contains(&byte_entropy);
 
                 // 2. Structural delimiter invariant verification (parentheses, braces, brackets)
                 let mut stack = Vec::new();
@@ -617,7 +617,7 @@ impl McpServer {
                 let block_size = args.get("block_size").and_then(|b| b.as_u64()).unwrap_or(64) as usize;
                 let block_size = block_size.clamp(16, 512);
 
-                let blocks_needed = (tokens + block_size - 1) / block_size;
+                let blocks_needed = tokens.div_ceil(block_size);
                 let total_slots = blocks_needed * block_size;
                 let wasted_slots = total_slots - tokens;
                 let fragmentation = (wasted_slots as f64 / total_slots as f64) * 100.0;
@@ -728,9 +728,7 @@ impl McpServer {
                 let total_vram_needed_gb = weight_gb + kv_cache_gb;
 
                 // Max throughput bounded by memory bandwidth: Throughput <= Bandwidth / Active Footprint
-                let theoretical_tok_s = if hw.is_unified_memory {
-                    (hw.memory_bandwidth_gbps as f64 / weight_gb).clamp(0.1, 150.0)
-                } else if hw.vram_gb >= total_vram_needed_gb as f32 {
+                let theoretical_tok_s = if hw.is_unified_memory || hw.vram_gb >= total_vram_needed_gb as f32 {
                     (hw.memory_bandwidth_gbps as f64 / weight_gb).clamp(0.1, 150.0)
                 } else {
                     (25.0 / weight_gb).clamp(0.1, 20.0)

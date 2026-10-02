@@ -1,5 +1,8 @@
 use harness_core::{MoEConfig, Result, Tensor};
 
+/// Result of MoE expert routing: (expert_indices_per_token, expert_weights_per_token)
+pub type ExpertRouteResult = (Vec<Vec<usize>>, Vec<Vec<f32>>);
+
 /// Gating network that computes top-k router probabilities for active experts
 pub struct MoERouter {
     gate_weight: Tensor, // [hidden_dim, num_routed_experts]
@@ -17,7 +20,7 @@ impl MoERouter {
     }
 
     /// Select top-k experts per token and return expert weights
-    pub fn route(&self, hidden_states: &Tensor) -> Result<(Vec<Vec<usize>>, Vec<Vec<f32>>)> {
+    pub fn route(&self, hidden_states: &Tensor) -> Result<ExpertRouteResult> {
         // Compute router logits = hidden_states @ gate_weight
         let logits = hidden_states.matmul(&self.gate_weight)?;
         let logits_slice = logits.as_f32_slice()?;
