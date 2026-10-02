@@ -2,6 +2,7 @@ pub mod batcher;
 pub mod checkpoint;
 pub mod code_engine;
 pub mod layer_streamer;
+pub mod moe_streamer;
 pub mod offload;
 pub mod reasoning;
 pub mod sampler;
@@ -13,6 +14,7 @@ pub use batcher::{BatchedInferenceEngine, GenerationRequest, GenerationStepOutpu
 pub use checkpoint::{AgentCheckpointManager, KVCheckpoint};
 pub use code_engine::{CodeQualityEngine, Language, SyntaxVerificationResult};
 pub use layer_streamer::TemporalLayerStreamer;
+pub use moe_streamer::{MoEOffloadEngine, MoEProfile, MoETokenMetrics};
 pub use offload::{HybridOffloader, OffloadProfile};
 pub use reasoning::{BestOfNConfig, CandidateTrajectory, ReasoningVerdict, TestTimeReasoningEngine};
 pub use sampler::{SamplingConfig, TokenSampler};
