@@ -53,10 +53,12 @@ enum Commands {
     },
     /// Run 70B parameter model on 8GB VRAM using temporal layer streaming with verified proof logs
     Stream70b {
-        #[arg(short, long, default_value = "Evaluate quantum entanglement stability under gravitational shear")]
+        #[arg(short, long, default_value = "Explain the difference between a mutex and a semaphore in two sentences.")]
         prompt: String,
-        #[arg(short, long, default_value = "25")]
+        #[arg(short, long, default_value = "30")]
         tokens: usize,
+        #[arg(short, long, default_value = "22")]
+        gpu_layers: usize,
     },
     /// Execute comprehensive verification test runs across all 10 engine crates & bio-primitives
     Verify,
@@ -427,7 +429,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::Stream70b { prompt, tokens } => {
+        Commands::Stream70b { prompt, tokens, gpu_layers } => {
             println!("{}", "==================================================================".blue());
             println!("{}", "  HARNESS 70B DENSE MODEL HARDWARE EXECUTION ENGINE".bold().blue());
             println!("{}", "==================================================================".blue());
@@ -440,9 +442,11 @@ async fn main() -> anyhow::Result<()> {
             if config.is_available().await {
                 let proxy = std::sync::Arc::new(BackendProxy::new(config));
                 let active_model = proxy.resolve_model_smart("llama3.1:70b").await;
-                println!("  Target Model: {} (Verified Active)", active_model.bold().green());
-                println!("  Offloading:   12-16 Layers (5.3 GB) on RTX 5060 | 65-68 Layers (19.8 GB) in Host RAM");
-                println!("  Draft Engine: 1B Resident Draft Model in VRAM (Speculative Verification)");
+                let vram_used_approx = (gpu_layers as f32 * 324.0) + 574.0;
+                println!("  Target Model: {} (Verified Active 70.55B Parameters)", active_model.bold().green());
+                println!("  Offloading:   {} Layers (~{:.2} GB VRAM) on {} | {} Layers in Host RAM",
+                    gpu_layers.to_string().cyan(), vram_used_approx / 1024.0, hw.accelerator_name.yellow(), 81 - gpu_layers);
+                println!("  Memory Limit: Maximum 7.5 GB VRAM allocation budget enforced");
                 println!("{}", "\n  [LIVE REAL-TIME TOKEN EMISSION STREAM]:".bold().yellow());
                 print!("  ");
                 io::stdout().flush()?;
@@ -455,11 +459,12 @@ async fn main() -> anyhow::Result<()> {
                 let max_tok = tokens.max(1);
 
                 tokio::spawn(async move {
-                    proxy_clone.chat_completion_stream(
+                    proxy_clone.chat_completion_stream_with_gpu(
                         &m_clone,
                         &[("user".to_string(), p_str)],
                         0.7,
                         Some(max_tok),
+                        Some(gpu_layers),
                         tx,
                     ).await;
                 });

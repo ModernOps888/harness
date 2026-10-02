@@ -162,6 +162,8 @@ pub struct OllamaOptions {
     pub top_p: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub num_predict: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_gpu: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -383,6 +385,7 @@ impl BackendProxy {
                         temperature: Some(temperature),
                         top_p: None,
                         num_predict: max_tokens,
+                        num_gpu: None,
                     }),
                 };
 
@@ -482,6 +485,19 @@ impl BackendProxy {
         max_tokens: Option<usize>,
         tx: tokio::sync::mpsc::Sender<Result<StreamChunk, BackendError>>,
     ) {
+        self.chat_completion_stream_with_gpu(model, messages, temperature, max_tokens, None, tx).await;
+    }
+
+    /// Send a streaming chat request with explicit GPU layer offloading control
+    pub async fn chat_completion_stream_with_gpu(
+        &self,
+        model: &str,
+        messages: &[(String, String)],
+        temperature: f32,
+        max_tokens: Option<usize>,
+        num_gpu: Option<usize>,
+        tx: tokio::sync::mpsc::Sender<Result<StreamChunk, BackendError>>,
+    ) {
         let resolved_model = self.resolve_model_smart(model).await;
         let chat_messages: Vec<OllamaChatMessage> = messages
             .iter()
@@ -502,6 +518,7 @@ impl BackendProxy {
                         temperature: Some(temperature),
                         top_p: None,
                         num_predict: max_tokens,
+                        num_gpu,
                     }),
                 };
 
