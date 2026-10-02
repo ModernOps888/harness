@@ -12,3 +12,6 @@ tracing = { workspace = true }
 half = { workspace = true }
 rayon = { workspace = true }
 uuid = { workspace = true }
+wgpu = { workspace = true }
+bytemuck = { workspace = true }
+pollster = { workspace = true }

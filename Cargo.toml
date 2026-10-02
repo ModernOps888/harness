@@ -59,6 +59,11 @@ half = { version = "2.4", features = ["serde"] }
 regex = "1.11"
 rand = "0.8"
 
+# GPU & Native Compute
+wgpu = "24"
+bytemuck = { version = "1.21", features = ["derive"] }
+pollster = "0.4"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

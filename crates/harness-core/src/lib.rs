@@ -10,10 +10,12 @@ pub mod config;
 pub mod device;
 pub mod dtype;
 pub mod error;
+pub mod gpu;
 pub mod tensor;
 
 pub use config::{MoEConfig, ModelArchitecture, ModelConfig, QuantizationMode};
 pub use device::{Device, DeviceManager, DeviceMemoryStats, HardwareProfile};
 pub use dtype::DType;
 pub use error::{HarnessError, Result};
+pub use gpu::{GpuContext, GpuQ4Tensor, GpuTensor};
 pub use tensor::{Shape, Strides, Tensor};

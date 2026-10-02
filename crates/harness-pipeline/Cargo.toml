@@ -9,7 +9,9 @@ harness-core = { workspace = true }
 harness-attention = { workspace = true }
 harness-models = { workspace = true }
 harness-quant = { workspace = true }
+harness-safety = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 rayon = { workspace = true }
