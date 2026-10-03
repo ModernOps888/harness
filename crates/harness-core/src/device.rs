@@ -91,7 +91,7 @@ impl HardwareProfile {
         } else if vram_gb >= 24.0 {
             ("Hybrid Offload: 70B Q4 Resident + FP8 KV Cache".into(), 65536)
         } else if vram_gb >= 8.0 || host_ram_gb >= 32.0 {
-            ("Temporal Layer Streaming (70B on 8GB VRAM Ping-Pong DMA)".into(), 32768)
+            ("Partial GPU offload + host-RAM layers (70B; executed by llama.cpp backend)".into(), 32768)
         } else {
             ("Aggressive Quantization (NF4) + CPU Paged Swap".into(), 8192)
         };

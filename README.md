@@ -25,14 +25,14 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 
 | Evaluation Task / Primitive | Active Measurement | Hardware Grounding / Verification Mechanism |
 | :--- | :--- | :--- |
-| **DFA Schema Constrained Decoding** | **66.4 ns** mask latency (<0.07 µs) | Zero-allocation precompiled bitmasks, 100% valid JSON guarantee |
-| **Entropy-Gated Speculative Depth** | **-95.2%** token waste reduction | Halts draft speculative bursts when Shannon entropy > 0.40 nats |
-| **PagedAttention Memory Pool** | **19.46 Million blocks/s** | 0 memory leaks across 100k cycles, 1.8% fragmentation |
-| **Pure-Rust AVX2 GEMV Kernel** | **20.96 GFLOP/s** throughput | Single-core compile-time SIMD intrinsics without Python/GIL |
+| **DFA Schema Constrained Decoding** | tens of ns per mask (run `harness-cli stress`) | Precompiled bitmasks; value varies per run, see captured [`microbench_stress.txt`](benchmarks/runs/microbench_stress.txt) |
+| **Entropy-Gated Speculative Depth** | synthetic simulation only (no model) | Waste-reduction figure comes from `harness-cli stress` step 4, a simulation; real speculative decoding results are in [`RESULTS.md`](benchmarks/runs/RESULTS.md) |
+| **PagedAttention Memory Pool** | ~10^7 blocks/s allocator microbenchmark | Allocator churn test with leak check; exact value per run in `microbench_stress.txt` |
+| **Pure-Rust AVX2 GEMM Kernel** | ~21 GFLOP/s (1024x1024 FP32, `stress` step 1) | Rayon + AVX2 microbenchmark with a precision audit; exact value per run in `microbench_stress.txt` |
 | **Cortical Lateral Inhibition** | Shannon entropy sharpening | Winner-take-all suppression of ambiguous tail logits |
-| **Hippocampal Dual-Memory** | **>90%** context saved | Volatile episodic buffer + low-rank engram consolidation |
-| **Backend Integration (Ollama / llama.cpp)** | **78.1 - 80.0 tok/s** (7B in VRAM) | Direct proxy & telemetry interception of underlying engine |
-| **70B Raw Hardware Execution (7.5GB VRAM)** | **1.00 - 1.05 tok/s** (22 layers on GPU) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`), 7.51 GB VRAM + 18.0 GB DDR4 RAM |
+| **Hippocampal Dual-Memory** | computed live by `harness-cli report` | Volatile episodic buffer + low-rank engram consolidation (algorithmic component, not an LLM quality claim) |
+| **Backend Integration (Ollama / llama.cpp)** | see [`RESULTS.md`](benchmarks/runs/RESULTS.md) | HARNESS proxies the backend and reports the backend's own timings |
+| **70B Raw Hardware Execution (8GB VRAM)** | see [`RESULTS.md`](benchmarks/runs/RESULTS.md) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`) executed by llama.cpp; raw logs + verbatim JSON responses committed |
 
 ---
 
@@ -41,12 +41,14 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 Model throughput is strictly bounded by physical interconnect bandwidth:
 $$\text{Max Throughput (tok/s)} \le \frac{\text{Memory Bandwidth (GB/s)}}{\text{Active Model Footprint (GB)}}$$
 
-### Verified Bare-Metal Execution (Tested on this PC: RTX 5060 8GB / 32GB DDR4)
+### Measured on this PC (RTX 5060 8GB / i5-10400F / 32GB DDR4-2133 dual-channel, PCIe 3.0 x8)
 
-| Hardware Setup | Memory Topology | Models Verified on Bare Metal | Execution Strategy | Measured Physical Throughput |
-| :--- | :--- | :--- | :--- | :--- |
-| **Local Bare-Metal Host** | **NVIDIA RTX 5060 8GB GDDR7 / 32GB DDR4** | **`Meta-Llama-3.1-70B-Instruct-Q2_K`**<br>(70.55B Parameters, 26.37 GB on disk) | Hybrid Offload (22 layers in GPU VRAM, 59 layers in DDR4 RAM) | **1.00 - 1.05 tok/s**<br>(**1.047 tok/s Measured**) |
-| **Local Bare-Metal Host** | **NVIDIA RTX 5060 8GB GDDR7** | **`Qwen2.5-Coder-7B-Instruct-Q4_K_M`**<br>(7.61B Parameters, 4.68 GB on disk) | 100% GPU VRAM Resident | **78.1 - 80.0 tok/s**<br>(**79.4 tok/s Measured**) |
+Every number is computed by [`benchmarks/summarize_runs.py`](benchmarks/summarize_runs.py) from raw captures in [`benchmarks/runs/`](benchmarks/runs/): the unmodified `llama-server` stdout (`server_stdout.txt`), the verbatim `/completion` HTTP responses, the exact command line, and `nvidia-smi` snapshots. Nothing in the UI, CLI or this README is a hand-typed benchmark: see [`RESULTS.md`](benchmarks/runs/RESULTS.md) for the table. Reproduce with `python benchmarks/raw_capture.py matrix` then `python benchmarks/summarize_runs.py`.
+
+- **Engine:** the weights are executed by the `llama-server` bundled with Ollama (llama.cpp). HARNESS is the orchestration, safety and measurement layer around it; it does not contain its own 70B inference kernels.
+- **Model:** `llama3.1:70b-instruct-q2_K`, all 70.55B parameters, 26,375,113,056 bytes. With 8 GB of VRAM only a fraction of layers fit on the GPU; the layer split is read from the llama.cpp log (not assumed) and the remainder runs from DDR4.
+- **Plain autoregressive vs speculative are different experiments.** The plain rows are the raw baseline. Speculative rows (1B draft model, n-gram lookup) are shown separately; their speedup depends on the content being generated, and `RESULTS.md` reports the per-prompt numbers, draft acceptance, and a check of whether the greedy output is identical to the baseline.
+- **Hardware facts** (`benchmarks/runs/hardware.txt`): DDR4-2133 dual-channel (calculated peak 34.1 GB/s, not a measured bandwidth) and PCIe 3.0 x8. Because PCIe is slower than the CPU's read of DDR4, streaming layers to the GPU per token cannot beat running them on the CPU on this machine.
 
 ### Theoretical Hardware Sizing: Apple Silicon Unified Memory Architecture (UMA)
 *(Note: Apple Silicon numbers below are theoretical physics calculations based on bus bandwidth $\frac{\text{Bandwidth}}{\text{Model Size}}$; they were not tested on this PC)*
@@ -58,8 +60,8 @@ $$\text{Max Throughput (tok/s)} \le \frac{\text{Memory Bandwidth (GB/s)}}{\text{
 | **M2 / M4 Ultra** | 128GB - 192GB Unified RAM | 800 - 1,092 GB/s | **18 - 24 tok/s** (Theoretical Bandwidth Limit) |
 
 ### Clarification on Bare-Metal Execution vs Theoretical Upper Bounds
-- **`harness stream70b`**: Executes the real physical weights of `llama3.1:70b-instruct-q2_K` on bare metal. In pure autoregressive mode with `--gpu-layers 22`, it offloads 22 layers (7.51 GB VRAM) onto the RTX 5060 and 59 layers (18.0 GB) into host DDR4 RAM, measuring a live **1.00 - 1.05 tok/s** (1.047 tok/s measured, bounded by the ~19.5 GB/s DDR4 memory bus). Zero simulations or approximations.
-- **Physical Memory Wall**: In discrete PC architectures, offloaded weights reside in host DDR4 RAM. Evaluating 59 layers requires streaming 18.025 GB across the memory controller for every single token: $\frac{18.025\text{ GB}}{19.5\text{ GB/s}} = 0.924\text{ s} \implies \mathbf{1.08\text{ tok/s max ceiling}}$. Claims of 15-24 tok/s apply to high-bandwidth Apple Silicon unified memory (800+ GB/s bus), not consumer discrete PCIe/DDR4 PCs.
+- **`harness stream70b`**: a proxy to the local llama.cpp/Ollama backend. It reports the backend's own measured eval speed for the prompt you give it; it prints no hardcoded speeds. If no backend is reachable it falls back to a clearly labeled small-tensor simulation.
+- **Physical Memory Wall**: in a discrete-GPU PC the layers that do not fit in VRAM are read from host RAM once per token, so decode speed is limited by CPU-side memory bandwidth. `RESULTS.md` includes a computed cross-check (CPU-resident weight bytes x measured tok/s) so the implied read rate can be compared with the calculated DDR4 peak. Higher figures quoted for Apple Silicon are bandwidth-ratio calculations, not measurements on this PC.
 
 ---
 
@@ -121,27 +123,27 @@ Standard transformer multi-head self-attention computes dense, all-to-all floati
 ### 2. Hippocampal Fast-Slow Dual Memory (CLS Theory)
 Solves the "KV Cache Memory Wall" and "Context Rot":
 - **Volatile Episodic Buffer (Hippocampus)**: Receives recent tokens in high-resolution FP8/Paged KV blocks.
-- **Cortical Engram Consolidation (Neocortex)**: During context pressure or generation pauses, the consolidator projects multi-layer KV states into low-rank sparse engram vectors, compressing context by **>90%** while preserving long-range needle retrieval across 128k tokens.
+- **Cortical Engram Consolidation (Neocortex)**: During context pressure or generation pauses, the consolidator projects multi-layer KV states into low-rank sparse engram vectors, compressing context by a ratio reported live by `harness-cli report` (an algorithmic component; long-range retrieval quality has not been benchmarked on this PC).
 
 ### 3. Cortical Lateral Inhibition & Shannon Entropy Detection
 Replaces uncalibrated top-k/top-p sampling with biological Winner-Take-All lateral suppression:
 $$z_i^* = z_i - \gamma \sum_{j \neq i} W_{ij} \sigma(z_j)$$
-Suppresses noisy tail logits, concentrating probability mass on mathematically sound trajectories and eliminating hallucination drift. Real-time Shannon entropy $H(X) = -\sum p(x) \ln p(x)$ triggers instant self-verification when uncertainty exceeds 0.40 nats.
+Suppresses noisy tail logits, concentrating probability mass on higher-confidence tokens (effect on hallucination rate has not been measured). Real-time Shannon entropy $H(X) = -\sum p(x) \ln p(x)$ triggers instant self-verification when uncertainty exceeds 0.40 nats.
 
-### 4. 70B-on-8B Temporal Layer Streaming (Ping-Pong DMA)
-Models 70-billion parameter transformer layer scheduling on consumer GPUs with 8GB VRAM:
+### 4. 70B-on-8B Temporal Layer Streaming (Ping-Pong DMA) - scheduling model
+Models 70-billion parameter transformer layer scheduling on consumer GPUs with 8GB VRAM. This is a scheduling/visualisation component: the real 70B runs reported in `benchmarks/runs/RESULTS.md` use llama.cpp's partial GPU offload, and on this PC (PCIe 3.0 x8, calculated ~7.9 GB/s) re-streaming weights over PCIe every token is not expected to beat reading them from DDR4 on the CPU:
 - Deconstructs 80 transformer layers into a streaming timeline.
 - Employs **double-buffered PCIe DMA transfers**: while **Slot 0** computes layer $L_n$ in VRAM, **Slot 1** prefetches layer $L_{n+1}$ from pinned system host RAM via asynchronous non-blocking memory streams.
-- Bounds active device buffers within a **4.8 GB** target allocation, demonstrating layer-swapping scheduling without memory exhaustion.
+- Bounds active device buffers within a configured target allocation, demonstrating layer-swapping scheduling without memory exhaustion (simulated timeline, not a throughput claim).
 
 ### 5. Multi-Core Parallel FlashAttention v3 with Rayon
 FlashAttention v3 in HARNESS divides query attention heads across all available physical CPU cores using `rayon::prelude::*`. Query heads execute concurrently with zero thread contention and cache-aligned online softmax updates, removing prefill CPU bottlenecks.
 
 ### 6. RadixTree Prefix Cache ($O(1)$ Block Reuse)
-The prefix caching engine (`RadixPrefixCache`) maintains a prefix trie over tokenized system instructions and tool schemas. When repeated system prompts or conversation histories are received, previously allocated physical KV blocks are matched in $O(1)$ time, slashing Time-To-First-Token (TTFT) to **under 2 milliseconds**.
+The prefix caching engine (`RadixPrefixCache`) maintains a prefix trie over tokenized system instructions and tool schemas. When repeated system prompts or conversation histories are received, previously allocated physical KV blocks are matched in $O(1)$ time, reducing prefill work for repeated prefixes (the data structure is unit-tested; end-to-end TTFT gains have not been benchmarked against the 70B model on this PC).
 
 ### 7. Entropy-Gated Adaptive Speculative Depth (Lossless Speculative Acceleration)
-Standard speculative decoding fixes draft depth $K$ statically (e.g. $K=4$ or $K=5$). When the draft model is uncertain, draft tokens diverge early, wasting expensive verification passes and memory traffic on discarded tokens. HARNESS continuously monitors the Shannon entropy $H(p) = -\sum p_i \ln p_i$ of the draft token distribution. Under high certainty ($H < 0.6$ nats), depth expands up to $K=8$; when entropy spikes ($H > 1.8$ nats), depth contracts dynamically down to $K=1$, eliminating up to **94.3%** of wasted speculative tokens while remaining 100% mathematically lossless.
+Standard speculative decoding fixes draft depth $K$ statically (e.g. $K=4$ or $K=5$). When the draft model is uncertain, draft tokens diverge early, wasting expensive verification passes and memory traffic on discarded tokens. HARNESS continuously monitors the Shannon entropy $H(p) = -\sum p_i \ln p_i$ of the draft token distribution. Under high certainty ($H < 0.6$ nats), depth expands up to $K=8$; when entropy spikes ($H > 1.8$ nats), depth contracts dynamically down to $K=1$, reducing wasted speculative tokens in the `stress` simulation (a model-free simulation, not a measured LLM result) while verification remains lossless by construction.
 
 ---
 

@@ -22,3 +22,5 @@ Thumbs.db
 *.bak
 *.log
 screenshot.png
+
+__pycache__/

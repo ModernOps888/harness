@@ -1,6 +1,6 @@
 # HARNESS: Official Systems Telemetry & Hardware Report
 
-**Generated:** 2026-10-02T15:58:20.772732800+00:00 UTC  
+**Generated:** 2026-10-03T16:46:46.183755200+00:00 UTC  
 **Engine Version:** 0.1.0 (Pure-Rust, Zero Python Runtime)  
 **Host Architecture:** windows (x86_64)  
 **Target Accelerator:** NVIDIA GeForce RTX 5060  
@@ -17,13 +17,13 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 
 | Evaluation Task / Primitive | Active Engine Measurement | Hardware Grounding / Mechanism |
 | :--- | :--- | :--- |
-| **Active 7B Generation Throughput** | 78.7 to 80.0 tok/s | Measured via local backend proxy (Ollama / llama.cpp) |
+| **Active 7B Generation Throughput** | see `benchmarks/runs/RESULTS.md` | Measured by the local llama.cpp backend, raw captures in repo |
 | **PagedAttention KV Pool** | 0.00% Fragmentation | Active block allocation with near-zero fragmentation |
 | **LIF Spiking Attention Sparsity** | 50.0% FLOPs Pruned | Membrane threshold theta >= 0.35 event gating |
 | **Hippocampal Dual-Memory** | 93.8% Context Saved | Low-rank engram consolidation (CLS theory) |
 | **Cortical Lateral Inhibition** | 0.042 -> 0.000 nats | Logit Shannon entropy reduction & sharpening |
-| **DFA Schema Constrained Decoding** | 39 μs per token | Microsecond deterministic finite automaton mask |
-| **Layered 70B Model Execution** | 1.00 to 1.05 tok/s (Raw Factual) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`), 7.51 GB VRAM (22 layers) + 18.0 GB DDR4 RAM |
+| **DFA Schema Constrained Decoding** | 3 μs per token | Microsecond deterministic finite automaton mask |
+| **Layered 70B Model Execution** | see `benchmarks/runs/RESULTS.md` | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`) executed by llama.cpp; GPU/CPU split taken from its log |
 
 ---
 
@@ -36,13 +36,13 @@ $$\text{Throughput (tok/s)} \le \frac{\text{Memory Bandwidth (GB/s)}}{\text{Acti
 
 | Platform / Tier | Memory Interconnect | Active Bandwidth | 7B/8B Speed (Q4 ~4.7GB) | 70B Speed (Q2_K/Q4 ~26-40GB) | Grounding / Verification |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PC Host (RTX 5060 8GB / 32GB DDR4)** | PCIe 4.0 x16 + DDR4 Bus | 272 GB/s (VRAM) / 19.5 GB/s (RAM) | **79.4 tok/s** (VRAM Resident) | **1.00 - 1.05 tok/s** (22L GPU / 59L RAM) | **Verified Bare-Metal** |
+| **PC Host (RTX 5060 8GB / 32GB DDR4-2133)** | PCIe 3.0 x8 + DDR4 dual-channel | 34.1 GB/s theoretical peak (RAM) | see RESULTS.md | see RESULTS.md | **Measured (raw logs in `benchmarks/runs/`)** |
 | **Mac M3/M4 Pro (24GB-36GB)** | Unified Memory Bus | 150 to 273 GB/s | **30 to 45 tok/s** (Theoretical) | **6 to 9 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac M3/M4 Max (48GB-64GB)** | Unified Memory Bus | 300 to 400+ GB/s | **40 to 60 tok/s** (Theoretical) | **8.5 to 11.2 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac Studio M2 Ultra (128GB)** | Unified Memory Bus | 800 GB/s | **50 to 80 tok/s** (Theoretical) | **14 to 18 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac Studio M2/M4 Ultra (192GB-512GB)** | Unified Memory Bus | 800 to 1200+ GB/s | **60 to 90 tok/s** (Theoretical) | **20 to 24 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 
-*Note: On this PC host, only 7B (79.4 tok/s resident) and 70B (1.05 tok/s offloaded) have been physically executed and verified on bare metal. Mac metrics are theoretical memory bandwidth sizing limits (Bandwidth / Model Size).
+*Note: On this PC host, only the configurations in `benchmarks/runs/RESULTS.md` have been physically executed. Mac metrics are theoretical memory bandwidth sizing limits (Bandwidth / Model Size).
 
 ---
 

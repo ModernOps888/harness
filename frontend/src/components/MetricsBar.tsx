@@ -59,7 +59,7 @@ export const MetricsBar: React.FC<MetricsProps> = ({
             <span className="font-mono text-indigo-300">
               {hardware?.is_unified_memory
                 ? `Apple Silicon UMA (${hardware.memory_bandwidth_gbps.toFixed(0)} GB/s Zero-Copy)`
-                : `PCIe 4.0 x16 DMA (~25 GB/s bus) | VRAM Peak: ${hardware?.memory_bandwidth_gbps.toFixed(0) || '504'} GB/s`}
+                : `PCIe 3.0 x8 (~7.9 GB/s theoretical) | VRAM Peak: ${hardware?.memory_bandwidth_gbps.toFixed(0) || '504'} GB/s`}
             </span>
           </span>
         </div>

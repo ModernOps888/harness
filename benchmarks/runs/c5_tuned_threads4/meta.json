@@ -1,0 +1,56 @@
+{
+  "name": "c5_tuned_threads4",
+  "cmd": [
+    "C:\\Users\\bchmi\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+    "--model",
+    "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-ba1103315c449ad06c9f5fd94230bde5bcf977f794af70afb107d29153c3cd53",
+    "--load-mode",
+    "none",
+    "-np",
+    "1",
+    "--port",
+    "8089",
+    "--host",
+    "127.0.0.1",
+    "--no-webui",
+    "-c",
+    "2048",
+    "-t",
+    "4",
+    "-fitt",
+    "384",
+    "-ctk",
+    "q8_0",
+    "-ctv",
+    "q8_0",
+    "-fa",
+    "on",
+    "-b",
+    "256",
+    "-ub",
+    "128"
+  ],
+  "started": "2026-10-03T17:29:33",
+  "git_head": "bf39f1c",
+  "free_ram_gb_before_launch": 22.24,
+  "total_ram_gb": 31.9,
+  "n_predict": 48,
+  "smi_before_launch": {
+    "time": "2026-10-03T17:29:33",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n1553 MiB, 6343 MiB, 8151 MiB, 3, 8, 7001 MHz"
+  },
+  "ready": {
+    "ok": true,
+    "msg": "ready in 99.3s"
+  },
+  "smi_after_load": {
+    "time": "2026-10-03T17:31:13",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n7554 MiB, 342 MiB, 8151 MiB, 3, 8, 7001 MHz"
+  },
+  "free_ram_gb_after_load": 2.89,
+  "smi_after_run": {
+    "time": "2026-10-03T17:35:16",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n7545 MiB, 351 MiB, 8151 MiB, 2, 8, 810 MHz"
+  },
+  "finished": "2026-10-03T17:35:16"
+}

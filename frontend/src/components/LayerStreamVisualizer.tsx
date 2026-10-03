@@ -26,7 +26,7 @@ export const LayerStreamVisualizer: React.FC<Props> = ({ activeModel, isStreamin
         <div className="flex items-center gap-2">
           <Waves className="w-4 h-4 text-cyan-400" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
-            Temporal Layer Streaming Architecture (70B on 8GB VRAM)
+            Layer Streaming Scheduling Model (illustrative, not measured throughput)
           </h3>
         </div>
         <span className="text-xs font-mono text-cyan-400 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
