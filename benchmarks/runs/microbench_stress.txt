@@ -1,0 +1,46 @@
+﻿cargo :    Compiling harness-loader v0.1.0 (C:\Harness\crates\harness-loader)
+At line:1 char:1
++ cargo run --release -p harness-cli -- stress 2>&1 | Out-File -Encodin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling ha...harness-loader):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling harness-models v0.1.0 (C:\Harness\crates\harness-models)
+   Compiling harness-pipeline v0.1.0 (C:\Harness\crates\harness-pipeline)
+   Compiling harness-server v0.1.0 (C:\Harness\crates\harness-server)
+   Compiling harness-mcp v0.1.0 (C:\Harness\crates\harness-mcp)
+   Compiling harness-cli v0.1.0 (C:\Harness\crates\harness-cli)
+    Finished `release` profile [optimized] target(s) in 58.63s
+     Running `target\release\harness-cli.exe stress`
+════════════════════════════════════════════════════════════════════════════════════════
+  ⚡ HARNESS SURGICAL HARDWARE STRESS TEST & MICROBENCHMARK SUITE
+════════════════════════════════════════════════════════════════════════════════════════
+  Measuring genuine physical hardware throughput, latency, and memory safety invariants.
+
+  [1/4] Benchmarking Host AVX2 SIMD GEMM (1024x1024 FP32)... DONE
+        • Execution Time:     100.74ms
+        • Compute Throughput: 21.32 GFLOP/s (Rayon 4-wide AVX2 unrolled)
+        • Precision Audit:    diff = 2.32e-6 (expected: 0.2048, actual: 0.2048)
+
+  [2/4] Stress testing PagedAttention churn (50000 physical blocks)... DONE
+        • Allocation Rate:    17302008 blocks/sec (981.10µs for 16975 blocks)
+        • Peak Fragmentation: 1.29%
+        • Churn & Free Cycle: 927.40µs
+        • Memory Leak Check:  50000 free blocks (expected: 50000), fragmentation: 0.0%
+
+  [3/4] Benchmarking Schema-Constrained DFA Masking (50000 iterations)... DONE
+        • Total Latency:      3.92ms
+        • Latency per Mask:   78.4 ns (0.08 μs)
+        • Masking Throughput: 12756404 masks/sec
+
+  [4/4] Benchmarking Entropy-Gated Adaptive Speculative (50 steps)... DONE
+        • Static K=5 Wasted:  153 tokens
+        • Adaptive K Wasted:  8 tokens
+        • Wasted Reduction:   94.8%
+        • Avg Dynamic Depth:  1.18 tokens (adapted in [1, 8])
+        • Effective Speedup:  0.78x over static speculative
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SURGICAL VERDICT: All stress tests passed with 0 memory leaks, 0 assertions failed.
+  Engine is mathematically grounded, bounds-checked, and hardware-verified.
+

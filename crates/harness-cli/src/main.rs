@@ -432,10 +432,10 @@ async fn main() -> anyhow::Result<()> {
             println!("  • Recommended Quant:       In-Situ Quantization (ISQ) Q4_K_M + FP8 KV Cache");
             println!("  • Prefetch Mode:           Dual-stream asynchronous DMA with PCIe double-buffering");
             if hw.is_unified_memory {
-                println!("  • Projected tok/s:         18.0 - 24.0 tok/s (Native Apple Silicon Zero-Copy UMA)\n");
+                println!("  • Projected tok/s:         not measured (Apple Silicon UMA; see calculated bandwidth ceiling in `doctor`)\n");
             } else {
-                println!("  • Physical Baseline tok/s: 1.00 - 1.05 tok/s (Autoregressive, 22 GPU layers in VRAM, DDR4 bus bound)");
-                println!("  • Speculative tok/s:       1.55 - 2.22 tok/s (1B VRAM Draft + 70B Verifier, 1.5x - 2.1x speedup)\n");
+                println!("  • Measured tok/s:          see benchmarks/runs/RESULTS.md (raw llama-server captures)");
+                println!("  • Speculative decoding:    measured separately per prompt type in RESULTS.md\n");
             }
         }
 
@@ -444,18 +444,17 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", "  HARNESS 70B DENSE MODEL HARDWARE EXECUTION ENGINE".bold().blue());
             println!("{}", "==================================================================".blue());
             let hw = HardwareProfile::auto_detect();
-            println!("  Hardware:     {} | Host RAM: {:.1} GB | VRAM Budget: {:.1} GB", hw.accelerator_name.yellow(), hw.host_ram_gb, hw.vram_gb);
-            println!("  Interconnect: {:.0} GB/s ({})", hw.memory_bandwidth_gbps, if hw.is_unified_memory { "Apple Silicon Zero-Copy UMA" } else { "PCIe 4.0 DMA Double-Buffering" });
+            println!("  Hardware:     {} | Host RAM: {:.1} GB | VRAM: {:.1} GB", hw.accelerator_name.yellow(), hw.host_ram_gb, hw.vram_gb);
+            println!("  Engine:       llama.cpp backend (via Ollama/llama-server); HARNESS orchestrates and measures, it does not execute the weights");
             println!("  Prompt:       \"{}\"\n", prompt.cyan());
 
             if speculative {
-                println!("  Execution Mode: {}", "Speculative Batched Verification (100% Lossless Distribution)".bold().green());
-                println!("  Draft Model:    {} (VRAM-Resident, 120+ tok/s drafting)", draft_model.cyan());
-                println!("  Draft Window:   K = {} candidate tokens per verification cycle", draft_tokens.to_string().yellow());
-                println!("  Target Speed:   1.55 - 2.22 tok/s (1.5x - 2.1x over DDR4 1.05 tok/s memory wall)\n");
+                println!("  Execution Mode: {}", "Speculative decoding request (lossless under greedy decoding; speed depends on draft acceptance)".bold().green());
+                println!("  Draft Model:    {}", draft_model.cyan());
+                println!("  Draft Window:   K = {} candidate tokens per verification cycle\n", draft_tokens.to_string().yellow());
             } else {
-                println!("  Execution Mode: {}", "Sequential Autoregressive (M=1 token per memory sweep)".white());
-                println!("  Memory Wall:    DDR4-2666 Bus Bound (~20 GB/s / 18 GB = ~1.05 tok/s baseline)\n");
+                println!("  Execution Mode: {}", "Sequential autoregressive (one token per full weight sweep)".white());
+                println!("  Throughput:     measured below from the backend's own eval counters (no baked-in figures)\n");
             }
 
             let effective_gpu_layers = if speculative { gpu_layers.min(15) } else { gpu_layers };
@@ -464,11 +463,8 @@ async fn main() -> anyhow::Result<()> {
             if config.is_available().await {
                 let proxy = std::sync::Arc::new(BackendProxy::new(config));
                 let active_model = proxy.resolve_model_smart("llama3.1:70b").await;
-                let vram_used_approx = (effective_gpu_layers as f32 * 324.0) + (if speculative { 1440.0 } else { 574.0 });
-                println!("  Target Model: {} (Verified Active 70.55B Parameters)", active_model.bold().green());
-                println!("  Offloading:   {} Layers (~{:.2} GB VRAM) on {} | {} Layers in Host RAM",
-                    effective_gpu_layers.to_string().cyan(), vram_used_approx / 1024.0, hw.accelerator_name.yellow(), 81 - effective_gpu_layers);
-                println!("  Memory Limit: Maximum 7.8 GB VRAM allocation budget enforced");
+                println!("  Target Model: {}", active_model.bold().green());
+                println!("  Requested:    num_gpu = {} layers (a request to the backend; actual placement is reported in the backend's own log)", effective_gpu_layers.to_string().cyan());
                 println!("{}", "\n  [LIVE REAL-TIME TOKEN EMISSION STREAM]:".bold().yellow());
                 print!("  ");
                 io::stdout().flush()?;
@@ -529,16 +525,13 @@ async fn main() -> anyhow::Result<()> {
                 let ttft_ms = first_tok_time.map(|d| d.as_secs_f64() * 1000.0).unwrap_or(0.0);
 
                 println!("{}", "==================================================================".bold().green());
-                println!("  {} Verified 70B Real Hardware Execution Trace", "LIVE TELEMETRY:".bold().green());
+                println!("  {} 70B generation trace (numbers come from the backend's own counters)", "LIVE TELEMETRY:".bold().green());
                 println!("  • Model Evaluated:           {}", active_model.cyan());
                 println!("  • Total Tokens Emitted:      {} tokens", token_count.to_string().bold().yellow());
                 println!("  • Time To First Token (TTFT):{:.1} ms", ttft_ms);
                 println!("  • Total Generation Time:     {:.2}s", total_elapsed.as_secs_f64());
-                println!("  • Measured Generation Speed: {} tok/s (Real Hardware Measured)", format!("{:.2}", measured_tok_s).bold().green());
-                println!("  • Memory Bandwidth Limit:    DDR4 Host RAM Bus Bounded at ~1.05 tok/s baseline (Autoregressive, 22 GPU layers)");
-                if measured_tok_s > 1.2 {
-                    println!("  • Speculative Acceleration:  {}x Speedup via Speculative Parallel Verification", format!("{:.2}", measured_tok_s / 1.047).bold().yellow());
-                }
+                println!("  • Measured Generation Speed: {} tok/s", format!("{:.2}", measured_tok_s).bold().green());
+                println!("  • Proof: run `python benchmarks/raw_capture.py` for raw server logs and verbatim timings JSON");
                 println!("==================================================================\n");
             } else {
                 println!("  {} No LLM backend detected on localhost:11434.", "NOTICE:".yellow());
@@ -939,13 +932,13 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 
 | Evaluation Task / Primitive | Active Engine Measurement | Hardware Grounding / Mechanism |
 | :--- | :--- | :--- |
-| **Active 7B Generation Throughput** | 78.7 to 80.0 tok/s | Measured via local backend proxy (Ollama / llama.cpp) |
+| **Active 7B Generation Throughput** | see `benchmarks/runs/RESULTS.md` | Measured by the local llama.cpp backend, raw captures in repo |
 | **PagedAttention KV Pool** | {:.2}% Fragmentation | Active block allocation with near-zero fragmentation |
 | **LIF Spiking Attention Sparsity** | {:.1}% FLOPs Pruned | Membrane threshold theta >= 0.35 event gating |
 | **Hippocampal Dual-Memory** | {:.1}% Context Saved | Low-rank engram consolidation (CLS theory) |
 | **Cortical Lateral Inhibition** | {:.3} -> {:.3} nats | Logit Shannon entropy reduction & sharpening |
 | **DFA Schema Constrained Decoding** | {} μs per token | Microsecond deterministic finite automaton mask |
-| **Layered 70B Model Execution** | 1.00 to 1.05 tok/s (Raw Factual) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`), 7.51 GB VRAM (22 layers) + 18.0 GB DDR4 RAM |
+| **Layered 70B Model Execution** | see `benchmarks/runs/RESULTS.md` | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`) executed by llama.cpp; GPU/CPU split taken from its log |
 
 ---
 
@@ -958,13 +951,13 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
 
 | Platform / Tier | Memory Interconnect | Active Bandwidth | 7B/8B Speed (Q4 ~4.7GB) | 70B Speed (Q2_K/Q4 ~26-40GB) | Grounding / Verification |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PC Host (RTX 5060 8GB / 32GB DDR4)** | PCIe 4.0 x16 + DDR4 Bus | 272 GB/s (VRAM) / 19.5 GB/s (RAM) | **79.4 tok/s** (VRAM Resident) | **1.00 - 1.05 tok/s** (22L GPU / 59L RAM) | **Verified Bare-Metal** |
+| **PC Host (RTX 5060 8GB / 32GB DDR4-2133)** | PCIe 3.0 x8 + DDR4 dual-channel | 34.1 GB/s theoretical peak (RAM) | see RESULTS.md | see RESULTS.md | **Measured (raw logs in `benchmarks/runs/`)** |
 | **Mac M3/M4 Pro (24GB-36GB)** | Unified Memory Bus | 150 to 273 GB/s | **30 to 45 tok/s** (Theoretical) | **6 to 9 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac M3/M4 Max (48GB-64GB)** | Unified Memory Bus | 300 to 400+ GB/s | **40 to 60 tok/s** (Theoretical) | **8.5 to 11.2 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac Studio M2 Ultra (128GB)** | Unified Memory Bus | 800 GB/s | **50 to 80 tok/s** (Theoretical) | **14 to 18 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 | **Mac Studio M2/M4 Ultra (192GB-512GB)** | Unified Memory Bus | 800 to 1200+ GB/s | **60 to 90 tok/s** (Theoretical) | **20 to 24 tok/s** (Theoretical) | Theoretical Bandwidth Sizing* |
 
-*Note: On this PC host, only 7B (79.4 tok/s resident) and 70B (1.05 tok/s offloaded) have been physically executed and verified on bare metal. Mac metrics are theoretical memory bandwidth sizing limits (Bandwidth / Model Size).
+*Note: On this PC host, only the configurations in `benchmarks/runs/RESULTS.md` have been physically executed. Mac metrics are theoretical memory bandwidth sizing limits (Bandwidth / Model Size).
 
 ---
 
@@ -1006,7 +999,7 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("  • Memory Bus Model:   {}", if hw.is_unified_memory {
                 "Apple Silicon Unified Memory Architecture (Zero PCIe copy overhead)".green()
             } else {
-                "Discrete PCIe DMA Interconnect (PCIe 4.0 x16 ~25-28 GB/s cap)".cyan()
+                "Discrete PCIe DMA Interconnect (link generation/width is machine specific; query nvidia-smi)".cyan()
             });
 
             #[cfg(target_arch = "x86_64")]
@@ -1063,27 +1056,21 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
                     )
                 } else if tier == "70B Dense" {
                     (
-                        "1.05 tok/s".to_string(),
-                        "22L GPU / 59L Host RAM".to_string(),
-                        "Verified Bare-Metal".to_string(),
+                        "see RESULTS.md".to_string(),
+                        "GPU/CPU split by llama.cpp".to_string(),
+                        "Measured (raw logs)".to_string(),
                     )
-                } else if tier == "7B Coder" {
+                } else if tier == "7B Coder" || hw.vram_gb >= size {
                     (
-                        "79.4 tok/s".to_string(),
+                        format!("<= {:.0} tok/s", hw.memory_bandwidth_gbps / size),
                         "Direct GPU VRAM Resident".to_string(),
-                        "Verified Bare-Metal".to_string(),
-                    )
-                } else if hw.vram_gb >= size {
-                    (
-                        format!("{:.1} tok/s", (hw.memory_bandwidth_gbps / size).clamp(1.0, 150.0)),
-                        "Direct GPU VRAM Resident".to_string(),
-                        "Verified Bare-Metal".to_string(),
+                        "Calculated ceiling".to_string(),
                     )
                 } else {
                     (
-                        format!("{:.1} tok/s", (25.0 / size).clamp(0.2, 5.0)),
+                        "not measured".to_string(),
                         "LayerStream Offload".to_string(),
-                        "Theoretical Bound".to_string(),
+                        "Not verified".to_string(),
                     )
                 };
 
@@ -1112,7 +1099,7 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("  • Total Draft Tokens Proposed:    {}", res.draft_tokens_count);
             println!("  • Authoritative Tokens Accepted:  {} ({}%)", res.accepted_tokens_count, format!("{:.1}", res.acceptance_rate * 100.0).bold().green());
             println!("  • Total Tokens Emitted to User:   {}", res.total_tokens_emitted.to_string().bold().green());
-            println!("  • Native Dense 70B Baseline Speed: 1.05 tok/s (950 ms / forward pass, 22 GPU layers)");
+            println!("  • Native Dense 70B Baseline Speed: see benchmarks/runs/RESULTS.md (measured, raw logs)");
             println!("  • Speculative Acceleration Factor: {}x Faster", format!("{:.2}", res.speedup_factor).bold().yellow());
             println!("  • Modeled Speculative Speed:       {} tok/s", format!("{:.2}", res.speculative_tok_per_sec).bold().green());
             println!("  • Algorithmic Verification Time:  {:.2?}", elapsed);
@@ -1149,8 +1136,8 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
 
             println!("  ----------------------------------------------------------------------------------------");
             println!("  CONCLUSION: Speculative drafting breaks DDR4 bus bottlenecks by validating multiple tokens");
-            println!("  in a single 70B forward pass, scaling 1.00-1.05 tok/s to 1.55-2.22 tok/s verified on RTX 5060, and");
-            println!("  up to 15-22 tok/s on Apple Silicon Unified Memory architectures (800 GB/s).\n");
+            println!("  in a single 70B forward pass. The model above is a mathematical simulation; real measured");
+            println!("  speculative results on this PC are in benchmarks/runs/RESULTS.md (content dependent).\n");
         }
         Commands::Stress { blocks, matrix_dim } => {
             println!("{}", "════════════════════════════════════════════════════════════════════════════════════════".cyan());
@@ -1732,7 +1719,7 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
                     println!("  • Projected Step Latency:          {:.1} ms (PCIe bus transfer model)", avg_latency);
                     println!("  • Projected Bus Throughput:        {} tok/s (Analytical memory model; not physical 48B weights)",
                         format!("{:.2}", avg_tok_s).bold().yellow());
-                    println!("  • Grounded Physical Fact:          Dense 70.55B physical weights run raw at 1.00 - 1.05 tok/s on this PC.\n");
+                    println!("  • Grounded Physical Fact:          measured dense 70.55B tok/s on this PC: benchmarks/runs/RESULTS.md.\n");
                     println!("  Live Emitted Response Snippet:\n  {}\n", full_output.lines().take(6).collect::<Vec<_>>().join("\n  ").italic().white());
                 }
             } else {
@@ -1787,7 +1774,7 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
                 println!("  • Projected Step Latency:          {:.1} ms (PCIe bus transfer model)", avg_latency);
                 println!("  • Projected Bus Throughput:        {} tok/s (Analytical memory model; not physical 48B weights)",
                     format!("{:.2}", avg_tok_s).bold().yellow());
-                println!("  • Grounded Physical Fact:          Dense 70.55B physical weights run raw at 1.00 - 1.05 tok/s on this PC.\n");
+                println!("  • Grounded Physical Fact:          measured dense 70.55B tok/s on this PC: benchmarks/runs/RESULTS.md.\n");
             }
         }
     }

@@ -66,7 +66,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             architecture: "Llama3_1".into(),
             quantization: "Q2_K".into(),
             context_length: 131072,
-            hardware_tier: "RTX 5060 8GB VRAM (22 layers) + 32GB DDR4 RAM (59 layers) - 1.05 tok/s".into(),
+            hardware_tier: "RTX 5060 8GB VRAM + 32GB host RAM (hybrid GPU/CPU offload); measured speed: see /proof".into(),
             sparse_routing: "Pure Autoregressive Forward Pass".into(),
         });
         models.push(ModelCard {
@@ -77,7 +77,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             architecture: "Qwen2_5".into(),
             quantization: "Q4_K_M".into(),
             context_length: 32768,
-            hardware_tier: "RTX 5060 8GB VRAM Resident (100% in VRAM) - 79.4 tok/s".into(),
+            hardware_tier: "RTX 5060 8GB VRAM resident; measured speed: see /proof".into(),
             sparse_routing: "Direct VRAM Execution".into(),
         });
         models.push(ModelCard {
@@ -88,7 +88,7 @@ pub async fn list_models(State(state): State<AppState>) -> Json<ModelListRespons
             architecture: "Llama3_2".into(),
             quantization: "Q8_0".into(),
             context_length: 8192,
-            hardware_tier: "RTX 5060 8GB VRAM Resident (1.3GB) - 120+ tok/s".into(),
+            hardware_tier: "RTX 5060 8GB VRAM resident (1.3GB); speed not benchmarked".into(),
             sparse_routing: "Direct VRAM Execution".into(),
         });
     }

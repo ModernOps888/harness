@@ -105,10 +105,10 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
                 <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
                   <tr className="hover:bg-slate-900/40 bg-emerald-950/20">
                     <td className="py-2.5 px-3 font-sans font-bold text-emerald-300">PC with RTX 5060 8GB (Verified Local)</td>
-                    <td className="py-2.5 px-3 text-slate-400">PCIe 4.0 x16 + DDR4-2666</td>
-                    <td className="py-2.5 px-3 text-slate-300">~19.5 GB/s DDR4</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">79.4 tok/s (Verified VRAM)</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">1.05 tok/s (Verified Bare-Metal)</td>
+                    <td className="py-2.5 px-3 text-slate-400">PCIe 3.0 x8 + DDR4-2133 dual-channel</td>
+                    <td className="py-2.5 px-3 text-slate-300">34.1 GB/s theoretical peak</td>
+                    <td className="py-2.5 px-3 text-slate-400">See Benchmark Matrix (measured logs)</td>
+                    <td className="py-2.5 px-3 text-slate-400">See Benchmark Matrix (measured logs)</td>
                     <td className="py-2.5 px-3 text-slate-500">N/A (Exceeds Memory)</td>
                   </tr>
                   <tr className="hover:bg-slate-900/40 opacity-75">
@@ -146,7 +146,7 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
                 </tbody>
               </table>
               <div className="p-2 text-[10px] text-slate-400 bg-slate-900/60 border-t border-slate-800">
-                *Notice: On this PC (RTX 5060 8GB / 32GB DDR4), only 7B (79.4 tok/s in VRAM) and 70B (1.05 tok/s bare-metal offload) have been physically executed and verified. Apple Silicon metrics are theoretical memory bandwidth upper bounds (Bandwidth / Model Size).
+                *Notice: On this PC (RTX 5060 8GB / 32GB DDR4), only the models in the Benchmark Matrix (raw captured llama.cpp logs) have been physically executed. DDR4-2133 peak = 2 channels x 8 B x 2133 MT/s (calculated, not a measured bandwidth). Apple Silicon metrics are theoretical memory bandwidth upper bounds (Bandwidth / Model Size).
               </div>
             </div>
           </div>

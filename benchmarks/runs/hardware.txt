@@ -1,0 +1,24 @@
+﻿================================================================================
+PHYSICAL HOST HARDWARE CAPTURE (RAW SYSTEM PROBE)
+================================================================================
+Host OS:        Microsoft Windows 11 Home (64-bit)
+Motherboard:    H510M-HDV/M.2 SE
+CPU:            Intel(R) Core(TM) i5-10400F CPU @ 2.90GHz
+GPU (nvidia):   NVIDIA GeForce RTX 5060, 8151 MiB, 591.86, 3, 3, 8, 16
+RAM Modules:
+
+Manufacturer PartNumber              Capacity ConfiguredClockSpeed Speed
+------------ ----------              -------- -------------------- -----
+SK Hynix     HMA82GU6MFR8N-TF     17179869184                 2133  2133
+SK Hynix     HMA82GU6AFR8N-UH     17179869184                 2133  2133
+
+
+
+Theoretical DDR4 Bandwidth:
+  DDR4-2133 Dual-Channel (64-bit x 2 = 128-bit bus):
+  2133.33 MT/s * 16 bytes = 34,133 MB/s (34.13 GB/s theoretical peak)
+  Note: Mismatched sticks (2133 + 2400) run at the lowest common clock (2133 MHz).
+PCIe Bus:
+  Current Link: Gen 3 x8 (~7.88 GB/s theoretical unidirectional)
+  GPU Max Capability: Gen 3 x16
+================================================================================
