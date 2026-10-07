@@ -22,10 +22,13 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
-OLLAMA_LIB = r"<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama"
+USER_HOME = os.path.expanduser("~")
+LOCAL_APP_DATA = os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local"))
+OLLAMA_LIB = os.environ.get("OLLAMA_LIB", os.path.join(LOCAL_APP_DATA, "Programs", "Ollama", "lib", "ollama"))
 CUDA_DIR = os.path.join(OLLAMA_LIB, "cuda_v13")
 LLAMA_SERVER = os.path.join(OLLAMA_LIB, "llama-server.exe")
-BLOBS = r"<USERPROFILE>\.ollama\models\blobs"
+OLLAMA_MODELS = os.environ.get("OLLAMA_MODELS", os.path.join(USER_HOME, ".ollama", "models"))
+BLOBS = os.path.join(OLLAMA_MODELS, "blobs")
 # llama3.1:70b-instruct-q2_K  (26,375,113,056 bytes) and llama3.2:1b Q8_0 (1,321,082,688 bytes)
 MODEL_70B = os.path.join(BLOBS, "sha256-ba1103315c449ad06c9f5fd94230bde5bcf977f794af70afb107d29153c3cd53")
 MODEL_1B = os.path.join(BLOBS, "sha256-74701a8c35f6c8d9a4b91f3f3497643001d63e0c7a84e085bed452548fa88d45")

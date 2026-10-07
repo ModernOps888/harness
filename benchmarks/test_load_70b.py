@@ -5,11 +5,15 @@ import time
 import urllib.request
 import json
 
-LLAMA_SERVER = r"<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama\llama-server.exe"
-CUDA_DIR = r"<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama\cuda_v13"
-OLLAMA_LIB = r"<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama"
-MODEL_70B = r"<USERPROFILE>\.ollama\models\blobs\sha256-ba1103315c449ad06c9f5fd94230bde5bcf977f794af70afb107d29153c3cd53"
-MODEL_1B = r"<USERPROFILE>\.ollama\models\blobs\sha256-74701a8c35f6c8d9a4b91f3f3497643001d63e0c7a84e085bed452548fa88d45"
+USER_HOME = os.path.expanduser("~")
+LOCAL_APP_DATA = os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local"))
+OLLAMA_LIB = os.environ.get("OLLAMA_LIB", os.path.join(LOCAL_APP_DATA, "Programs", "Ollama", "lib", "ollama"))
+CUDA_DIR = os.path.join(OLLAMA_LIB, "cuda_v13")
+LLAMA_SERVER = os.path.join(OLLAMA_LIB, "llama-server.exe")
+OLLAMA_MODELS = os.environ.get("OLLAMA_MODELS", os.path.join(USER_HOME, ".ollama", "models"))
+BLOBS = os.path.join(OLLAMA_MODELS, "blobs")
+MODEL_70B = os.path.join(BLOBS, "sha256-ba1103315c449ad06c9f5fd94230bde5bcf977f794af70afb107d29153c3cd53")
+MODEL_1B = os.path.join(BLOBS, "sha256-74701a8c35f6c8d9a4b91f3f3497643001d63e0c7a84e085bed452548fa88d45")
 
 env = os.environ.copy()
 env["GGML_BACKEND_PATH"] = os.path.join(CUDA_DIR, "ggml-cuda.dll")

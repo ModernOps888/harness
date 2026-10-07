@@ -11,12 +11,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$OLLAMA_LIB = "<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama"
+# Dynamic environment resolution (zero hardcoded user paths)
+$USER_HOME = $env:USERPROFILE
+$LOCAL_APP_DATA = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { "$USER_HOME\AppData\Local" }
+$OLLAMA_LIB = if ($env:OLLAMA_LIB) { $env:OLLAMA_LIB } else { "$LOCAL_APP_DATA\Programs\Ollama\lib\ollama" }
 $CUDA_DIR = "$OLLAMA_LIB\cuda_v13"
 $LLAMA_SERVER = "$OLLAMA_LIB\llama-server.exe"
 
-$MODEL_32B = "<USERPROFILE>\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9"
-$MODEL_DRAFT_1_5B = "<USERPROFILE>\.ollama\models\blobs\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104"
+$OLLAMA_MODELS = if ($env:OLLAMA_MODELS) { $env:OLLAMA_MODELS } else { "$USER_HOME\.ollama\models" }
+$BLOBS = "$OLLAMA_MODELS\blobs"
+
+$MODEL_32B = "$BLOBS\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9"
+$MODEL_DRAFT_1_5B = "$BLOBS\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104"
 
 if (-not (Test-Path $MODEL_32B)) {
     Write-Error "Qwen2.5-Coder-32B model blob not found at: $MODEL_32B"
@@ -57,9 +63,11 @@ $serverArgs = @(
     "--spec-type", "draft-simple"
 )
 
+$baseDir = if ($PSScriptRoot) { $PSScriptRoot } else { "." }
+
 if ($Background) {
-    $logOut = "C:\Harness\server.log"
-    $logErr = "C:\Harness\server_err.log"
+    $logOut = "$baseDir\server.log"
+    $logErr = "$baseDir\server_err.log"
     Start-Process -FilePath $LLAMA_SERVER -ArgumentList $serverArgs -RedirectStandardOutput $logOut -RedirectStandardError $logErr -WindowStyle Minimized
     Write-Host "[LAUNCHED] Server starting in background on port $Port (Logs: $logOut)" -ForegroundColor Green
 } else {

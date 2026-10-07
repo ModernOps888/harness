@@ -9,8 +9,8 @@ Write-Host "========================================================" -Foregroun
 $harnessPort = Get-NetTCPConnection -LocalPort 8089 -State Listen -ErrorAction SilentlyContinue
 if (-not $harnessPort) {
     Write-Host ""
-    Write-Host "[1/3] Launching Harness Accelerated Model Server (Qwen2.5-Coder-32B + 1.5B Drafter)..." -ForegroundColor Yellow
-    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "C:\Harness\launch_qwen32b_coder.ps1" -WindowStyle Minimized
+    $scriptPath = Join-Path $PSScriptRoot "launch_qwen32b_coder.ps1"
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $scriptPath -WindowStyle Minimized
     $ready = $false
     for ($i = 0; $i -lt 45; $i++) {
         Start-Sleep -Seconds 2

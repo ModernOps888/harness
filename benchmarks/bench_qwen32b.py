@@ -19,11 +19,14 @@ import urllib.error
 import urllib.request
 from datetime import datetime
 
-OLLAMA_LIB = r"<USERPROFILE>\AppData\Local\Programs\Ollama\lib\ollama"
+USER_HOME = os.path.expanduser("~")
+LOCAL_APP_DATA = os.environ.get("LOCALAPPDATA", os.path.join(USER_HOME, "AppData", "Local"))
+OLLAMA_LIB = os.environ.get("OLLAMA_LIB", os.path.join(LOCAL_APP_DATA, "Programs", "Ollama", "lib", "ollama"))
 CUDA_DIR = os.path.join(OLLAMA_LIB, "cuda_v13")
 LLAMA_SERVER = os.path.join(OLLAMA_LIB, "llama-server.exe")
-BLOBS = r"<USERPROFILE>\.ollama\models\blobs"
-MANIFEST_32B = r"<USERPROFILE>\.ollama\models\manifests\registry.ollama.ai\library\qwen2.5-coder\32b"
+OLLAMA_MODELS = os.environ.get("OLLAMA_MODELS", os.path.join(USER_HOME, ".ollama", "models"))
+BLOBS = os.path.join(OLLAMA_MODELS, "blobs")
+MANIFEST_32B = os.path.join(OLLAMA_MODELS, "manifests", "registry.ollama.ai", "library", "qwen2.5-coder", "32b")
 
 # Drafter: Qwen2.5-Coder-1.5B
 MODEL_DRAFT_1_5B = os.path.join(BLOBS, "sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104")
