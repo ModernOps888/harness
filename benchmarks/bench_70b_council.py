@@ -16,6 +16,7 @@ BLOBS = os.path.join(OLLAMA_MODELS, "blobs")
 MODEL_70B = os.path.join(BLOBS, "sha256-ba1103315c449ad06c9f5fd94230bde5bcf977f794af70afb107d29153c3cd53")
 MODEL_1B = os.path.join(BLOBS, "sha256-74701a8c35f6c8d9a4b91f3f3497643001d63e0c7a84e085bed452548fa88d45")
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server_run.log")
+PORT = int(os.environ.get("HARNESS_PORT", "8089"))
 
 def get_env():
     env = os.environ.copy()
@@ -29,7 +30,7 @@ def wait_for_server(timeout=180):
     print("Waiting for server to initialize 70B weights...", flush=True)
     while time.time() - start < timeout:
         try:
-            req = urllib.request.Request("http://127.0.0.1:8080/health")
+            req = urllib.request.Request(f"http://127.0.0.1:{PORT}/health")
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode())
@@ -49,7 +50,7 @@ def get_nvidia_smi():
         return f"Error: {e}"
 
 def execute_prompt(prompt, n_predict=30):
-    url = "http://127.0.0.1:8080/completion"
+    url = f"http://127.0.0.1:{PORT}/completion"
     payload = {
         "prompt": prompt,
         "n_predict": n_predict,
@@ -89,7 +90,7 @@ def run_experiment(name, extra_args, prompt, n_predict=30):
         "-ub", "512",
         "--flash-attn", "auto",
         "--no-warmup",
-        "--port", "8080",
+        "--port", str(PORT),
         "--host", "127.0.0.1",
         "--no-webui"
     ] + extra_args

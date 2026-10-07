@@ -20,6 +20,8 @@ env["GGML_BACKEND_PATH"] = os.path.join(CUDA_DIR, "ggml-cuda.dll")
 env["PATH"] = f"{OLLAMA_LIB};{CUDA_DIR};" + env.get("PATH", "")
 env["CUDA_VISIBLE_DEVICES"] = "0"
 
+PORT = int(os.environ.get("HARNESS_PORT", "8089"))
+
 cmd = [
     LLAMA_SERVER,
     "--model", MODEL_70B,
@@ -28,7 +30,7 @@ cmd = [
     "-b", "512",
     "-ub", "512",
     "--flash-attn", "auto",
-    "--port", "8080",
+    "--port", str(PORT),
     "--host", "127.0.0.1",
     "--no-webui"
 ]
@@ -45,7 +47,7 @@ while time.time() - start < 60:
     if line:
         log_lines.append(line.strip())
         print(f"[{time.time()-start:.1f}s] {line.strip()}")
-        if "listening on http://127.0.0.1:8080" in line:
+        if f"listening on http://127.0.0.1:{PORT}" in line:
             server_ready = True
             break
     if p.poll() is not None:
@@ -55,7 +57,7 @@ while time.time() - start < 60:
 if server_ready:
     print("\nSUCCESS: 70B loaded successfully!")
     try:
-        req = urllib.request.Request("http://127.0.0.1:8080/health")
+        req = urllib.request.Request(f"http://127.0.0.1:{PORT}/health")
         resp = urllib.request.urlopen(req)
         print(f"Health check status: {resp.status}")
     except Exception as e:
