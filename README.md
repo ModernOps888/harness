@@ -33,6 +33,7 @@ HARNESS is an autonomous high-performance inference orchestration and safety mid
 | **Hippocampal Dual-Memory** | computed live by `harness-cli report` | Volatile episodic buffer + low-rank engram consolidation (algorithmic component, not an LLM quality claim) |
 | **Backend Integration (Ollama / llama.cpp)** | see [`RESULTS.md`](benchmarks/runs/RESULTS.md) | HARNESS proxies the backend and reports the backend's own timings |
 | **70B Raw Hardware Execution (8GB VRAM)** | see [`RESULTS.md`](benchmarks/runs/RESULTS.md) | Real 70.55B weights (`llama3.1:70b-instruct-q2_K`) executed by llama.cpp; raw logs + verbatim JSON responses committed |
+| **32B Coder Speculative Execution (8GB VRAM)** | see [`QWEN32B_RESULTS.md`](benchmarks/runs/qwen32b_coder/QWEN32B_RESULTS.md) | Real 32.76B weights with 1.5B Q4 drafter in RTX 5060 GDDR7; 2.99 tok/s pooled (+157.8% speedup vs 1.16 tok/s baseline) |
 
 ---
 
