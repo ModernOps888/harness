@@ -4,6 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20(Metal%20UMA)%20%7C%20Windows%20(CUDA%2FROCm)-blueviolet.svg)](#multi-os-hardware-auto-detection)
+[![Enterprise-Advisory](https://img.shields.io/badge/Enterprise-Sovereign_AI_Advisory-00f0ff.svg)](https://infinitytechstack.uk/consulting)
+
+> 🚀 **Enterprise Sovereign AI Deployment & Audits**: Scaling on-prem or air-gapped LLM inference on consumer hardware or sovereign cloud? We build **turnkey on-prem AI architecture blueprints** (£7,500) and perform **production agent security audits** (£4,500 with remediation PRs). [**Explore Packages & Book a Call →**](https://infinitytechstack.uk/consulting)
 
 **HARNESS** is a high-performance, pure-Rust inference orchestration, guardrail, and telemetry middleware designed to sit in front of local and remote LLM runners (such as Ollama, llama.cpp, and vLLM). By integrating biological and algorithmic safety primitives - including **DFA Constrained Schema Decoding**, **Shannon Entropy Hallucination Gating**, **Leaky Integrate-and-Fire (LIF) Spiking Attention**, and **PagedAttention Memory Accounting** - HARNESS enforces deterministic agent behavior and real-time hardware telemetry without sacrificing execution performance.
 
