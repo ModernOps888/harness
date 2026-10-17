@@ -16,8 +16,8 @@ struct Dimensions {
 
 const TILE_SIZE: u32 = 16u;
 
-var<workgroup> tile_a: array<array<f32, 16>, 16>;
-var<workgroup> tile_b: array<array<f32, 16>, 16>;
+var<workgroup> tile_a: array<array<f32, 17>, 16>;
+var<workgroup> tile_b: array<array<f32, 17>, 16>;
 
 @compute @workgroup_size(16, 16, 1)
 fn gemm_tiled(

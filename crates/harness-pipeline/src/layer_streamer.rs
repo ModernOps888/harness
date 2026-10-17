@@ -9,9 +9,9 @@ pub struct LayerSlot {
 }
 
 /// Temporal Layer Streamer:
-/// Enables massive models (like 70B parameters requiring ~40GB VRAM)
-/// to run smoothly on 8GB consumer GPUs by streaming individual layer weights
-/// sequentially through double-buffered GPU memory slots with async prefetch.
+/// Enables 27B–35B Coder models (such as Qwen2.5-Coder-32B and Qwen3-32B requiring ~19.85GB in Q4_K_M)
+/// to execute efficiently on 8GB GDDR7 consumer GPUs by combining static VRAM layer pinning
+/// with double-buffered GPU staging slots and asynchronous DMA prefetch.
 pub struct TemporalLayerStreamer {
     pub total_layers: usize,
     pub max_active_slots: usize, // Typically 2 slots (ping-pong double buffering)
@@ -39,7 +39,7 @@ impl TemporalLayerStreamer {
         info!(
             total_layers = total_layers,
             vram_budget_mb = vram_budget_bytes / (1024 * 1024),
-            "Initialized Temporal Layer Streamer (70B-on-8B engine)"
+            "Initialized Temporal Layer Streamer (27B-35B Coder hybrid GDDR7 double-buffered engine)"
         );
 
         Self {

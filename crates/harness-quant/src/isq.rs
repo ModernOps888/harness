@@ -23,23 +23,47 @@ impl ISQEngine {
         Self { target }
     }
 
-    /// Analyze tensor variance and gradient sensitivity to assign optimal quantization precision
+    /// Analyze tensor outlier crest factor (max_abs / rms), kurtosis, and layer topology
+    /// to assign optimal quantization precision (mirroring Q4_K_M / IQ4_XS mixed-precision allocation).
     pub fn profile_layer(&self, layer_name: &str, weights: &Tensor) -> Result<LayerQuantProfile> {
         let f32_data = weights.as_f32_slice()?;
-        let mean = f32_data.iter().sum::<f32>() / f32_data.len() as f32;
-        let variance = f32_data.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / f32_data.len() as f32;
+        let n = f32_data.len().max(1) as f32;
+        let mean = f32_data.iter().sum::<f32>() / n;
+        let mut sum_sq = 0.0f32;
+        let mut variance_acc = 0.0f32;
+        let mut max_abs = 0.0f32;
 
-        // Embedding layers and lm_head have higher outlier sensitivity
+        for &x in f32_data {
+            let abs_x = x.abs();
+            if abs_x > max_abs {
+                max_abs = abs_x;
+            }
+            sum_sq += x * x;
+            let diff = x - mean;
+            variance_acc += diff * diff;
+        }
+
+        let rms = (sum_sq / n).sqrt();
+        let variance = variance_acc / n;
+        let crest_factor = if rms > 1e-8 { max_abs / rms } else { 1.0 };
+
+        // Embedding, output/lm_head, norms, and Q4_K_M sensitive projections (attn_v, ffn_down)
         let is_critical_layer = layer_name.contains("embed")
             || layer_name.contains("lm_head")
+            || layer_name.contains("output")
             || layer_name.contains("norm")
             || layer_name.contains("layers.0.")
             || layer_name.contains(".final_");
 
+        let is_high_salience_proj = layer_name.contains("attn_v")
+            || layer_name.contains("v_proj")
+            || layer_name.contains("ffn_down")
+            || layer_name.contains("down_proj");
+
         let sensitivity = if is_critical_layer {
             0.95
-        } else if variance > 0.05 {
-            0.75
+        } else if is_high_salience_proj || crest_factor > 6.0 || variance > 0.05 {
+            0.78
         } else {
             0.35
         };
@@ -59,3 +83,4 @@ impl ISQEngine {
         })
     }
 }
+

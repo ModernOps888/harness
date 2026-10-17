@@ -23,6 +23,7 @@ struct Q4GemvDims {
 @group(0) @binding(2) var<storage, read_write> output_y: array<f32>;
 @group(0) @binding(3) var<uniform> dims: Q4GemvDims;
 
+var<workgroup> shared_x: array<f32, 256>;
 var<workgroup> shared_q4_acc: array<f32, 256>;
 
 @compute @workgroup_size(256, 1, 1)
@@ -31,52 +32,46 @@ fn gemv_q4_decode(
     @builtin(local_invocation_id) local_id: vec3<u32>
 ) {
     let col = group_id.x;
-    if (col >= dims.n) {
-        return;
-    }
-
     let tid = local_id.x;
+    let warp_id = tid / 32u;       // 0..7 (8 warps per workgroup -> 8 Q4 blocks = 256 weights per tile)
+    let lane = tid % 32u;          // 0..31 (1 weight per lane inside the 32-weight Q4 block)
+    let chunk = lane / 8u;         // 0..3 (selects qs0, qs1, qs2, or qs3)
+    let shift = (lane % 8u) * 4u;  // Bit shift (0..28) for this lane's 4-bit nibble
+
     var thread_sum: f32 = 0.0;
+    let num_tiles = (dims.blocks_per_col + 7u) / 8u;
 
-    // Each thread processes a stride of 32-element Q4 blocks down column 'col'
-    for (var b = tid; b < dims.blocks_per_col; b = b + 256u) {
-        let block_idx = col * dims.blocks_per_col + b;
-        let block = blocks_w[block_idx];
-        let scale = block.scale;
-        let min_val = block.min_val;
-        let x_offset = b * 32u;
+    for (var t: u32 = 0u; t < num_tiles; t = t + 1u) {
+        let b_base = t * 8u;
+        let k_idx = b_base * 32u + tid;
 
-        // Unpack qs0 (8 nibbles: 0..7)
-        let w0 = block.qs0;
-        for (var i = 0u; i < 8u; i = i + 1u) {
-            let nibble = f32((w0 >> (i * 4u)) & 0x0Fu);
-            let weight = nibble * scale + min_val;
-            thread_sum = thread_sum + vector_x[x_offset + i] * weight;
+        // 100% coalesced unit-stride load of 256 elements of vector_x into shared memory
+        if (k_idx < dims.k) {
+            shared_x[tid] = vector_x[k_idx];
+        } else {
+            shared_x[tid] = 0.0;
         }
+        workgroupBarrier();
 
-        // Unpack qs1 (8 nibbles: 8..15)
-        let w1 = block.qs1;
-        for (var i = 0u; i < 8u; i = i + 1u) {
-            let nibble = f32((w1 >> (i * 4u)) & 0x0Fu);
-            let weight = nibble * scale + min_val;
-            thread_sum = thread_sum + vector_x[x_offset + 8u + i] * weight;
-        }
+        let b = b_base + warp_id;
+        if (col < dims.n && b < dims.blocks_per_col && k_idx < dims.k) {
+            let block_idx = col * dims.blocks_per_col + b;
+            let block = blocks_w[block_idx];
 
-        // Unpack qs2 (8 nibbles: 16..23)
-        let w2 = block.qs2;
-        for (var i = 0u; i < 8u; i = i + 1u) {
-            let nibble = f32((w2 >> (i * 4u)) & 0x0Fu);
-            let weight = nibble * scale + min_val;
-            thread_sum = thread_sum + vector_x[x_offset + 16u + i] * weight;
-        }
+            var word: u32 = block.qs0;
+            if (chunk == 1u) {
+                word = block.qs1;
+            } else if (chunk == 2u) {
+                word = block.qs2;
+            } else if (chunk == 3u) {
+                word = block.qs3;
+            }
 
-        // Unpack qs3 (8 nibbles: 24..31)
-        let w3 = block.qs3;
-        for (var i = 0u; i < 8u; i = i + 1u) {
-            let nibble = f32((w3 >> (i * 4u)) & 0x0Fu);
-            let weight = nibble * scale + min_val;
-            thread_sum = thread_sum + vector_x[x_offset + 24u + i] * weight;
+            let nibble = f32((word >> shift) & 0x0Fu);
+            let weight = nibble * block.scale + block.min_val;
+            thread_sum = thread_sum + shared_x[tid] * weight;
         }
+        workgroupBarrier();
     }
 
     shared_q4_acc[tid] = thread_sum;
@@ -90,7 +85,7 @@ fn gemv_q4_decode(
         workgroupBarrier();
     }
 
-    if (tid == 0u) {
+    if (tid == 0u && col < dims.n) {
         output_y[col] = shared_q4_acc[0];
     }
 }

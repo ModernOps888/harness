@@ -80,6 +80,28 @@ struct Q4GemvUniform {
     _pad: u32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Q4GemmBatchedUniform {
+    m: u32,
+    k: u32,
+    n: u32,
+    blocks_per_col: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct FlashAttnGqaUniform {
+    seq_len_q: u32,
+    seq_len_kv: u32,
+    num_q_heads: u32,
+    num_kv_heads: u32,
+    head_dim: u32,
+    gqa_ratio: u32,
+    causal: u32,
+    scale: f32,
+}
+
 /// Native GPU 4-Bit Quantized Weight Matrix stored directly in device VRAM
 #[derive(Clone)]
 pub struct GpuQ4Tensor {
@@ -711,5 +733,286 @@ impl GpuTensor {
         ctx.queue.submit(Some(encoder.finish()));
         Ok(out)
     }
+
+    /// Native Batched 4-Bit Quantized Micro-GEMM for Speculative Decoding Verification: Y = X * W_q4
+    /// X: [M, K] (where M = K_draft + 1 tokens verified simultaneously), W_q4: [K, N] -> Y: [M, N]
+    /// Reads 4-bit quantized weights from VRAM ONLY ONCE across all M tokens in a batch tile!
+    pub fn gemm_q4_batched(&self, ctx: &GpuContext, weight: &GpuQ4Tensor) -> Result<Self> {
+        let (m, k) = if self.shape.len() == 2 {
+            (self.shape[0], self.shape[1])
+        } else if self.shape.len() == 1 {
+            (1, self.shape[0])
+        } else {
+            return Err(HarnessError::InvalidShape(format!(
+                "GPU batched Q4 GEMM requires 1D [K] or 2D [M, K] input, got {:?}",
+                self.shape
+            )));
+        };
+
+        if k != weight.k {
+            return Err(HarnessError::ShapeMismatch {
+                expected: vec![m, weight.k],
+                found: vec![m, k],
+            });
+        }
+
+        let n = weight.n;
+        let blocks_per_col = k.div_ceil(32);
+        let out = Self::empty(ctx, vec![m, n])?;
+
+        let dims = Q4GemmBatchedUniform {
+            m: m as u32,
+            k: k as u32,
+            n: n as u32,
+            blocks_per_col: blocks_per_col as u32,
+        };
+
+        let uniform_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("GEMM Q4 Batched Dims Uniform"),
+            contents: bytemuck::bytes_of(&dims),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("GEMM Q4 Batched BindGroup"),
+            layout: &ctx.gemm_q4_batched_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: weight.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: out.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("GEMM Q4 Batched Command Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("GEMM Q4 Batched Compute Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&ctx.gemm_q4_batched_pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            let gx = n as u32;
+            let gy = (m as u32).div_ceil(8);
+            cpass.dispatch_workgroups(gx, gy, 1);
+        }
+
+        ctx.queue.submit(Some(encoder.finish()));
+        Ok(out)
+    }
+
+    /// Native Fused GPU Residual Add + RMSNorm: h = self + residual; y = rms_norm(h, weight, eps)
+    pub fn fused_add_rmsnorm(
+        &self,
+        ctx: &GpuContext,
+        residual: &Self,
+        weight: &Self,
+        eps: f32,
+    ) -> Result<Self> {
+        if self.numel != residual.numel {
+            return Err(HarnessError::ShapeMismatch {
+                expected: self.shape.clone(),
+                found: residual.shape.clone(),
+            });
+        }
+
+        let hidden_dim = *self.shape.last().unwrap_or(&1);
+        let num_tokens = self.numel / hidden_dim;
+
+        if weight.numel < hidden_dim {
+            return Err(HarnessError::ShapeMismatch {
+                expected: vec![hidden_dim],
+                found: weight.shape.clone(),
+            });
+        }
+
+        let out = Self::empty(ctx, self.shape.clone())?;
+
+        let params = NormUniform {
+            num_tokens: num_tokens as u32,
+            hidden_dim: hidden_dim as u32,
+            eps,
+            _pad: 0,
+        };
+
+        let uniform_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Fused Add RMSNorm Uniform"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Fused Add RMSNorm BindGroup"),
+            layout: &ctx.fused_add_rmsnorm_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: residual.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: weight.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: out.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Fused Add RMSNorm Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Fused Add RMSNorm Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&ctx.fused_add_rmsnorm_pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups(num_tokens as u32, 1, 1);
+        }
+
+        ctx.queue.submit(Some(encoder.finish()));
+        Ok(out)
+    }
+
+    /// Native Fused GPU Grouped-Query Attention (GQA) FlashAttention
+    /// Natively supports Qwen2.5-Coder-32B's 5:1 GQA head ratio (num_q_heads=40, num_kv_heads=8, head_dim=128)
+    /// with online softmax and causal / speculative batch verification masking on GPU.
+    #[allow(clippy::too_many_arguments)]
+    pub fn flash_attention_gqa(
+        &self,
+        ctx: &GpuContext,
+        k: &Self,
+        v: &Self,
+        num_q_heads: usize,
+        num_kv_heads: usize,
+        head_dim: usize,
+        causal: bool,
+    ) -> Result<Self> {
+        if num_kv_heads == 0 || !num_q_heads.is_multiple_of(num_kv_heads) {
+            return Err(HarnessError::InvalidShape(format!(
+                "num_q_heads ({}) must be a positive multiple of num_kv_heads ({})",
+                num_q_heads, num_kv_heads
+            )));
+        }
+        if head_dim == 0 || head_dim > 128 {
+            return Err(HarnessError::InvalidShape(format!(
+                "GPU FlashAttention GQA requires head_dim in 1..=128, got {}",
+                head_dim
+            )));
+        }
+        if k.numel != v.numel {
+            return Err(HarnessError::ShapeMismatch {
+                expected: k.shape.clone(),
+                found: v.shape.clone(),
+            });
+        }
+
+        let q_stride = num_q_heads * head_dim;
+        let kv_stride = num_kv_heads * head_dim;
+        if !self.numel.is_multiple_of(q_stride) || !k.numel.is_multiple_of(kv_stride) {
+            return Err(HarnessError::InvalidShape(
+                "Q/KV tensor element counts are not divisible by (num_heads * head_dim)".into(),
+            ));
+        }
+
+        let seq_len_q = self.numel / q_stride;
+        let seq_len_kv = k.numel / kv_stride;
+        let gqa_ratio = num_q_heads / num_kv_heads;
+        let scale = 1.0 / (head_dim as f32).sqrt();
+
+        let out = Self::empty(ctx, self.shape.clone())?;
+
+        let params = FlashAttnGqaUniform {
+            seq_len_q: seq_len_q as u32,
+            seq_len_kv: seq_len_kv as u32,
+            num_q_heads: num_q_heads as u32,
+            num_kv_heads: num_kv_heads as u32,
+            head_dim: head_dim as u32,
+            gqa_ratio: gqa_ratio as u32,
+            causal: if causal { 1 } else { 0 },
+            scale,
+        };
+
+        let uniform_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("FlashAttention GQA Uniform"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("FlashAttention GQA BindGroup"),
+            layout: &ctx.flash_attn_gqa_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: k.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: v.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: out.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("FlashAttention GQA Command Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("FlashAttention GQA Compute Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&ctx.flash_attn_gqa_pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            let g_chunks = gqa_ratio.div_ceil(8) as u32;
+            let gx = (num_kv_heads as u32) * g_chunks;
+            let gy = seq_len_q as u32;
+            cpass.dispatch_workgroups(gx, gy, 1);
+        }
+
+        ctx.queue.submit(Some(encoder.finish()));
+        Ok(out)
+    }
 }
+
 

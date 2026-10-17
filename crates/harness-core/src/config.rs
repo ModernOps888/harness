@@ -53,6 +53,120 @@ pub struct ModelConfig {
 }
 
 impl ModelConfig {
+    /// Primary 32B Coder Sweet-Spot Configuration: Qwen 2.5 Coder 32B Instruct (64 Layers, GQA 40:8, 32.76B Params)
+    pub fn qwen2_5_coder_32b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Qwen2_5,
+            vocab_size: 152064,
+            hidden_size: 5120,
+            intermediate_size: 27648,
+            num_hidden_layers: 64,
+            num_attention_heads: 40,
+            num_key_value_heads: 8,
+            max_position_embeddings: 32768,
+            rms_norm_eps: 1e-6,
+            rope_theta: 1_000_000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// 100% VRAM-Resident Speculative Drafter for Qwen 2.5 Coder 32B: Qwen 2.5 Coder 1.5B Instruct (28 Layers, GQA 12:2)
+    pub fn qwen2_5_coder_1_5b_draft() -> Self {
+        Self {
+            architecture: ModelArchitecture::Qwen2_5,
+            vocab_size: 151936,
+            hidden_size: 1536,
+            intermediate_size: 8960,
+            num_hidden_layers: 28,
+            num_attention_heads: 12,
+            num_key_value_heads: 2,
+            max_position_embeddings: 32768,
+            rms_norm_eps: 1e-6,
+            rope_theta: 1_000_000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Mid-Tier Dense Coder Configuration: Qwen 2.5 Coder 14B Instruct (48 Layers, GQA 40:8, 14.7B Params)
+    pub fn qwen2_5_coder_14b() -> Self {
+        Self {
+            architecture: ModelArchitecture::Qwen2_5,
+            vocab_size: 152064,
+            hidden_size: 5120,
+            intermediate_size: 13824,
+            num_hidden_layers: 48,
+            num_attention_heads: 40,
+            num_key_value_heads: 8,
+            max_position_embeddings: 32768,
+            rms_norm_eps: 1e-6,
+            rope_theta: 1_000_000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// High-Speed Sparse Coder MoE: Qwen3-30B-A3B (30.5B Total, 3.0B Active Parameters, 128 Routed Experts, Top-8)
+    pub fn qwen3_30b_a3b_moe() -> Self {
+        Self {
+            architecture: ModelArchitecture::Qwen3,
+            vocab_size: 151936,
+            hidden_size: 2048,
+            intermediate_size: 768,
+            num_hidden_layers: 48,
+            num_attention_heads: 32,
+            num_key_value_heads: 4,
+            max_position_embeddings: 32768,
+            rms_norm_eps: 1e-6,
+            rope_theta: 1_000_000.0,
+            moe: Some(MoEConfig {
+                num_routed_experts: 128,
+                num_shared_experts: 0,
+                num_active_experts: 8,
+                routing_top_k: 8,
+                norm_topk_prob: true,
+            }),
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// DeepSeek Coder 33B Instruct (62 Layers, GQA 56:8, 7168 Hidden Dim)
+    pub fn deepseek_coder_33b() -> Self {
+        Self {
+            architecture: ModelArchitecture::DeepSeekV3,
+            vocab_size: 32256,
+            hidden_size: 7168,
+            intermediate_size: 19200,
+            num_hidden_layers: 62,
+            num_attention_heads: 56,
+            num_key_value_heads: 8,
+            max_position_embeddings: 16384,
+            rms_norm_eps: 1e-6,
+            rope_theta: 100000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
+    /// Gemma 2 27B Instruct (46 Layers, GQA 32:16, 4608 Hidden Dim)
+    pub fn gemma2_27b_it() -> Self {
+        Self {
+            architecture: ModelArchitecture::Gemma3,
+            vocab_size: 256000,
+            hidden_size: 4608,
+            intermediate_size: 36864,
+            num_hidden_layers: 46,
+            num_attention_heads: 32,
+            num_key_value_heads: 16,
+            max_position_embeddings: 8192,
+            rms_norm_eps: 1e-6,
+            rope_theta: 10000.0,
+            moe: None,
+            quantization: QuantizationMode::Q4_K_M,
+        }
+    }
+
     /// Recommended configuration for Qwen 3.8-27B
     pub fn qwen3_27b() -> Self {
         Self {
@@ -69,6 +183,33 @@ impl ModelConfig {
             moe: None,
             quantization: QuantizationMode::Q4_K_M,
         }
+    }
+
+    /// Compute exact per-layer Q4_K_M weight footprint in bytes (~4.85 bits/weight including block scales/mins)
+    pub fn per_layer_weight_bytes_q4(&self) -> usize {
+        let head_dim = self.hidden_size / self.num_attention_heads.max(1);
+        let q_params = self.hidden_size * (self.num_attention_heads * head_dim);
+        let kv_params = 2 * self.hidden_size * (self.num_key_value_heads * head_dim);
+        let o_params = (self.num_attention_heads * head_dim) * self.hidden_size;
+        let attn_params = q_params + kv_params + o_params;
+
+        let ffn_single = 3 * self.hidden_size * self.intermediate_size;
+        let ffn_params = if let Some(ref moe) = self.moe {
+            ffn_single * (moe.num_routed_experts + moe.num_shared_experts).max(1)
+        } else {
+            ffn_single
+        };
+
+        // Q4_K_M averages ~4.85 bits/parameter (0.60625 bytes/parameter)
+        ((attn_params + ffn_params) as f64 * 0.60625) as usize
+    }
+
+    /// Compute KV cache footprint in bytes per token across all layers for given K and V bit-widths
+    pub fn kv_cache_bytes_per_token(&self, bits_k: usize, bits_v: usize) -> usize {
+        let head_dim = self.hidden_size / self.num_attention_heads.max(1);
+        let kv_dim = self.num_key_value_heads * head_dim;
+        let total_bits = self.num_hidden_layers * kv_dim * (bits_k + bits_v);
+        total_bits.div_ceil(8)
     }
 
     /// Configuration for Llama 3.3 70B Dense (80 Layers, 8192 Dim, 70.55B Parameters)

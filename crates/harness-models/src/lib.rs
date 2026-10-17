@@ -7,7 +7,7 @@ pub mod transformer;
 
 pub use deepseek::DeepSeekV4Model;
 pub use llama::Llama4Model;
-pub use moe::{MoERouter, MoELayer};
-pub use qwen::Qwen3Model;
+pub use moe::{MoEExpert, MoELayer, MoERouter};
+pub use qwen::{Qwen2_5CoderModel, Qwen3Model};
 pub use traits::CausalLM;
 pub use transformer::TransformerBlock;

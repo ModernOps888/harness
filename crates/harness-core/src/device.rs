@@ -74,26 +74,26 @@ impl HardwareProfile {
             64.0   // Dual-channel host DDR5
         };
 
-        // 4. Formulate optimal execution strategy for 70B models
+        // 4. Formulate optimal execution strategy for 27B-35B Coder & 70B models
         let (recommended_strategy, max_context) = if is_unified_memory {
             // On Apple Silicon, RAM IS VRAM! Zero-copy GPU access without PCIe bus transfers
             if host_ram_gb >= 64.0 {
-                ("Apple Silicon UMA: 70B 100% Resident in Unified RAM (Zero-PCIe Overhead, 800GB/s)".into(), 131072)
+                ("Apple Silicon UMA: 32B Coder & 70B 100% Resident in Unified RAM (Zero-PCIe Overhead, 800GB/s)".into(), 131072)
             } else if host_ram_gb >= 36.0 {
-                ("Apple Silicon UMA: 70B Q4_K_M Zero-Copy Unified RAM + FP8 KV Cache".into(), 65536)
-            } else if host_ram_gb >= 16.0 {
-                ("Apple Silicon UMA: High-Bandwidth Layer Streaming (Zero-PCIe Bottleneck)".into(), 32768)
+                ("Apple Silicon UMA: 32B Coder 100% Resident + 1.5B Speculative Drafter (Zero-Copy Metal)".into(), 65536)
+            } else if host_ram_gb >= 24.0 {
+                ("Apple Silicon UMA: 27B-32B Coder Q4_K_M Resident + Q8_0/Q4_0 KV Cache".into(), 32768)
             } else {
-                ("Apple Silicon UMA: Compact NF4 Dynamic Unified Paged Cache".into(), 16384)
+                ("Apple Silicon UMA: 14B Coder Q4_K_S / 30B-A3B MoE Resident + Compact KV Cache".into(), 16384)
             }
-        } else if vram_gb >= 40.0 {
-            ("Full VRAM Resident (Dense/MoE Zero-Offload)".into(), 131072)
         } else if vram_gb >= 24.0 {
-            ("Hybrid Offload: 70B Q4 Resident + FP8 KV Cache".into(), 65536)
+            ("24GB+ VRAM: 32B Coder 100% GPU Resident (-ngl 64) + 1.5B Drafter + FP8/Q8 KV Cache".into(), 65536)
+        } else if vram_gb >= 16.0 {
+            ("16GB VRAM Hybrid: 32B Coder (-ngl 44) + 100% VRAM 1.5B Drafter (-ngld 99) + Q8_0/Q4_0 KV".into(), 32768)
         } else if vram_gb >= 8.0 || host_ram_gb >= 32.0 {
-            ("Partial GPU offload + host-RAM layers (70B; executed by llama.cpp backend)".into(), 32768)
+            ("27B-35B Coder Sweet-Spot: Qwen2.5-Coder-32B (-ngl 17..21) + 100% VRAM 1.5B Speculative Drafter (-ngld 99) + Q8_0/Q4_0 FlashAttn".into(), 32768)
         } else {
-            ("Aggressive Quantization (NF4) + CPU Paged Swap".into(), 8192)
+            ("Compact Coder Tier: 14B Q4_K_S / 30B-A3B Sparse MoE + Q4_0 KV Cache".into(), 8192)
         };
 
         Self {
@@ -109,6 +109,84 @@ impl HardwareProfile {
             max_supported_context: max_context,
         }
     }
+
+    /// Compute an exact hardware-grounded GPU/CPU offload & speculative decoding plan for 27B-35B Coder models
+    pub fn plan_coder_offload(
+        &self,
+        config: &crate::config::ModelConfig,
+        draft_vram_mb: usize,
+        ctx_len: usize,
+    ) -> CoderOffloadPlan {
+        let total_layers = config.num_hidden_layers;
+        let per_layer_bytes = config.per_layer_weight_bytes_q4();
+        let per_layer_weight_mb = per_layer_bytes as f32 / (1024.0 * 1024.0);
+
+        let kv_q8_bytes = config.kv_cache_bytes_per_token(8, 8) * ctx_len;
+        let kv_q4_bytes = config.kv_cache_bytes_per_token(8, 4) * ctx_len;
+        let kv_cache_q8_mb = kv_q8_bytes.div_ceil(1024 * 1024);
+        let kv_cache_q4_mb = kv_q4_bytes.div_ceil(1024 * 1024);
+
+        let vram_total_mb = (self.vram_gb * 1024.0) as usize;
+        // Reserve ~480 MB for CUDA/Vulkan context, FlashAttention workspace, and output lm_head staging
+        let compute_scratch_mb = 480usize;
+        let reserved_mb = compute_scratch_mb + draft_vram_mb + kv_cache_q4_mb;
+        let usable_for_target_mb = vram_total_mb.saturating_sub(reserved_mb);
+
+        let raw_ngl = (usable_for_target_mb as f32 / per_layer_weight_mb.max(1.0)).floor() as usize;
+        let gpu_layers_ngl = if self.is_unified_memory && self.host_ram_gb >= 24.0 {
+            total_layers
+        } else {
+            raw_ngl.min(total_layers)
+        };
+        let cpu_layers = total_layers.saturating_sub(gpu_layers_ngl);
+        let gpu_weights_mb = (gpu_layers_ngl as f32 * per_layer_weight_mb).round() as usize;
+        let ddr4_traffic_gb_per_pass = (cpu_layers as f32 * per_layer_weight_mb) / 1024.0;
+
+        let draft_gpu_layers_ngld = if draft_vram_mb > 0 { 99 } else { 0 };
+        let spec_draft_max = if draft_vram_mb > 0 { 8 } else { 0 };
+        let recommended_threads = std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).max(4))
+            .unwrap_or(6);
+
+        let llama_server_flags = format!(
+            "-ngl {} -ngld {} --spec-draft-n-max {} -c {} -t {} -ctk q8_0 -ctv q4_0 -fa on -b 512 -ub 256",
+            gpu_layers_ngl, draft_gpu_layers_ngld, spec_draft_max, ctx_len, recommended_threads
+        );
+
+        CoderOffloadPlan {
+            total_layers,
+            gpu_layers_ngl,
+            cpu_layers,
+            draft_gpu_layers_ngld,
+            draft_vram_mb,
+            kv_cache_q8_mb,
+            kv_cache_q4_mb,
+            per_layer_weight_mb,
+            gpu_weights_mb,
+            ddr4_traffic_gb_per_pass,
+            spec_draft_max,
+            recommended_threads,
+            llama_server_flags,
+        }
+    }
+}
+
+/// Hardware-grounded offload & speculative decoding execution plan for 27B-35B Coder models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoderOffloadPlan {
+    pub total_layers: usize,
+    pub gpu_layers_ngl: usize,
+    pub cpu_layers: usize,
+    pub draft_gpu_layers_ngld: usize,
+    pub draft_vram_mb: usize,
+    pub kv_cache_q8_mb: usize,
+    pub kv_cache_q4_mb: usize,
+    pub per_layer_weight_mb: f32,
+    pub gpu_weights_mb: usize,
+    pub ddr4_traffic_gb_per_pass: f32,
+    pub spec_draft_max: usize,
+    pub recommended_threads: usize,
+    pub llama_server_flags: String,
 }
 
 fn detect_system_ram_gb() -> f32 {

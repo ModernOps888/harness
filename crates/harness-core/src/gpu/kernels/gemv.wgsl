@@ -14,6 +14,7 @@ struct GemvDims {
 @group(0) @binding(2) var<storage, read_write> output_y: array<f32>;
 @group(0) @binding(3) var<uniform> dims: GemvDims;
 
+var<workgroup> shared_x: array<f32, 256>;
 var<workgroup> shared_acc: array<f32, 256>;
 
 @compute @workgroup_size(256, 1, 1)
@@ -22,18 +23,26 @@ fn gemv_decode(
     @builtin(local_invocation_id) local_id: vec3<u32>
 ) {
     let col = group_id.x;
-    if (col >= dims.n) {
-        return;
-    }
-
     let tid = local_id.x;
     var sum: f32 = 0.0;
 
-    // Strided accumulation across K dimension
-    for (var k = tid; k < dims.k; k = k + 256u) {
-        let x_val = vector_x[k];
-        let w_val = matrix_w[k * dims.n + col];
-        sum = sum + x_val * w_val;
+    let num_tiles = (dims.k + 255u) / 256u;
+
+    // Cooperatively load vector_x tiles into shared workgroup memory before multiplying
+    for (var t: u32 = 0u; t < num_tiles; t = t + 1u) {
+        let k = t * 256u + tid;
+        if (k < dims.k) {
+            shared_x[tid] = vector_x[k];
+        } else {
+            shared_x[tid] = 0.0;
+        }
+        workgroupBarrier();
+
+        if (col < dims.n && k < dims.k) {
+            let w_val = matrix_w[k * dims.n + col];
+            sum = sum + shared_x[tid] * w_val;
+        }
+        workgroupBarrier();
     }
 
     shared_acc[tid] = sum;
@@ -47,7 +56,7 @@ fn gemv_decode(
         workgroupBarrier();
     }
 
-    if (tid == 0u) {
+    if (tid == 0u && col < dims.n) {
         output_y[col] = shared_acc[0];
     }
 }

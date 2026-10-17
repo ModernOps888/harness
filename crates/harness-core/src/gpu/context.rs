@@ -20,14 +20,23 @@ pub struct GpuContext {
     pub gemv_q4_pipeline: wgpu::ComputePipeline,
     pub gemv_q4_layout: wgpu::BindGroupLayout,
 
+    pub gemm_q4_batched_pipeline: wgpu::ComputePipeline,
+    pub gemm_q4_batched_layout: wgpu::BindGroupLayout,
+
     pub rmsnorm_pipeline: wgpu::ComputePipeline,
     pub rmsnorm_layout: wgpu::BindGroupLayout,
+
+    pub fused_add_rmsnorm_pipeline: wgpu::ComputePipeline,
+    pub fused_add_rmsnorm_layout: wgpu::BindGroupLayout,
 
     pub swiglu_pipeline: wgpu::ComputePipeline,
     pub swiglu_layout: wgpu::BindGroupLayout,
 
     pub rope_pipeline: wgpu::ComputePipeline,
     pub rope_layout: wgpu::BindGroupLayout,
+
+    pub flash_attn_gqa_pipeline: wgpu::ComputePipeline,
+    pub flash_attn_gqa_layout: wgpu::BindGroupLayout,
 }
 
 impl GpuContext {
@@ -90,14 +99,26 @@ impl GpuContext {
         // 1c. GEMV Q4 Quantized Pipeline
         let (gemv_q4_pipeline, gemv_q4_layout) = Self::create_gemv_q4_pipeline(&device)?;
 
+        // 1d. Batched Q4 Micro-GEMM Pipeline (M = K_draft + 1 Speculative Verification)
+        let (gemm_q4_batched_pipeline, gemm_q4_batched_layout) =
+            Self::create_gemm_q4_batched_pipeline(&device)?;
+
         // 2. RMSNorm Pipeline
         let (rmsnorm_pipeline, rmsnorm_layout) = Self::create_rmsnorm_pipeline(&device)?;
+
+        // 2b. Fused Add + RMSNorm Pipeline
+        let (fused_add_rmsnorm_pipeline, fused_add_rmsnorm_layout) =
+            Self::create_fused_add_rmsnorm_pipeline(&device)?;
 
         // 3. SwiGLU Pipeline
         let (swiglu_pipeline, swiglu_layout) = Self::create_swiglu_pipeline(&device)?;
 
         // 4. RoPE Pipeline
         let (rope_pipeline, rope_layout) = Self::create_rope_pipeline(&device)?;
+
+        // 5. Fused GQA FlashAttention Pipeline
+        let (flash_attn_gqa_pipeline, flash_attn_gqa_layout) =
+            Self::create_flash_attn_gqa_pipeline(&device)?;
 
         Ok(Self {
             device,
@@ -111,12 +132,18 @@ impl GpuContext {
             gemv_layout,
             gemv_q4_pipeline,
             gemv_q4_layout,
+            gemm_q4_batched_pipeline,
+            gemm_q4_batched_layout,
             rmsnorm_pipeline,
             rmsnorm_layout,
+            fused_add_rmsnorm_pipeline,
+            fused_add_rmsnorm_layout,
             swiglu_pipeline,
             swiglu_layout,
             rope_pipeline,
             rope_layout,
+            flash_attn_gqa_pipeline,
+            flash_attn_gqa_layout,
         })
     }
 
@@ -541,4 +568,241 @@ impl GpuContext {
 
         Ok((pipeline, layout))
     }
+
+    fn create_gemm_q4_batched_pipeline(
+        device: &wgpu::Device,
+    ) -> Result<(wgpu::ComputePipeline, wgpu::BindGroupLayout)> {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("GEMM Q4 Batched Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(GEMM_Q4_BATCHED_SHADER.into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("GEMM Q4 Batched Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("GEMM Q4 Batched Pipeline Layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("GEMM Q4 Batched Compute Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some("gemm_q4_batched"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        Ok((pipeline, layout))
+    }
+
+    fn create_fused_add_rmsnorm_pipeline(
+        device: &wgpu::Device,
+    ) -> Result<(wgpu::ComputePipeline, wgpu::BindGroupLayout)> {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Fused Add RMSNorm Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(FUSED_ADD_RMSNORM_SHADER.into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Fused Add RMSNorm Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Fused Add RMSNorm Pipeline Layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Fused Add RMSNorm Compute Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some("fused_add_rms_norm"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        Ok((pipeline, layout))
+    }
+
+    fn create_flash_attn_gqa_pipeline(
+        device: &wgpu::Device,
+    ) -> Result<(wgpu::ComputePipeline, wgpu::BindGroupLayout)> {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("FlashAttention GQA Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(FLASH_ATTN_GQA_SHADER.into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("FlashAttention GQA Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("FlashAttention GQA Pipeline Layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("FlashAttention GQA Compute Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some("flash_attn_gqa"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        Ok((pipeline, layout))
+    }
 }
+

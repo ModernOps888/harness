@@ -97,3 +97,102 @@ fn test_fp8_quantization_roundtrip() {
     let mae = sum_err / numel as f32;
     assert!(mae < 0.2, "FP8 MAE too high: {}", mae);
 }
+
+#[test]
+fn test_fp8_e4m3_bit_level_and_group_scales() {
+    use harness_quant::{f32_to_fp8_e4m3, fp8_e4m3_to_f32, Fp8Tensor};
+
+    // Exact zero, max normal (448.0), negative normal, and subnormal (2^-9 = 0.001953125)
+    assert_eq!(fp8_e4m3_to_f32(f32_to_fp8_e4m3(0.0)), 0.0);
+    assert_eq!(fp8_e4m3_to_f32(f32_to_fp8_e4m3(448.0)), 448.0);
+    assert_eq!(fp8_e4m3_to_f32(f32_to_fp8_e4m3(-448.0)), -448.0);
+    let subnormal = 3.0 / 512.0;
+    assert!((fp8_e4m3_to_f32(f32_to_fp8_e4m3(subnormal)) - subnormal).abs() < 1e-6);
+
+    // Heavy-tailed tensor: one 32-element block has a massive outlier (200.0), others are small (~0.1)
+    let mut vals = vec![0.1f32; 128];
+    vals[0] = 200.0;
+    let tensor = Tensor::from_f32_slice(&vals, vec![4, 32], Device::Cpu).unwrap();
+    let fp8_grouped = Fp8Tensor::from_f32_tensor(&tensor).unwrap();
+    assert_eq!(fp8_grouped.group_scales.len(), 4);
+
+    let rec = fp8_grouped.dequantize().unwrap();
+    let rec_slice = rec.as_f32_slice().unwrap();
+    // Blocks 1..4 are isolated from the outlier in block 0!
+    assert!((rec_slice[64] - 0.1).abs() < 0.01);
+}
+
+#[test]
+fn test_nf4_grouped_64_and_voronoi_binary_search() {
+    use harness_quant::{find_closest_nf4_bin, QuantizedNF4Tensor, NF4_BINS};
+
+    for (idx, &center) in NF4_BINS.iter().enumerate() {
+        assert_eq!(find_closest_nf4_bin(center) as usize, idx);
+    }
+
+    // 256 elements = 4 groups of 64 with vastly different dynamic scales
+    let mut values = Vec::with_capacity(256);
+    for g in 0..4 {
+        let group_scale = 10.0f32.powi(g - 1); // 0.1, 1.0, 10.0, 100.0
+        for i in 0..64 {
+            values.push(((i as f32 / 32.0) - 1.0) * group_scale);
+        }
+    }
+    let tensor = Tensor::from_f32_slice(&values, vec![4, 64], Device::Cpu).unwrap();
+    let q_nf4 = QuantizedNF4Tensor::from_f32_tensor(&tensor).unwrap();
+    assert_eq!(q_nf4.scales.len(), 4);
+    assert!(q_nf4.scale > 0.0);
+
+    let deq = q_nf4.dequantize().unwrap();
+    let deq_slice = deq.as_f32_slice().unwrap();
+    // Group 0 (scale 0.1) preserves high precision despite Group 3 having scale 100.0
+    for i in 0..64 {
+        assert!((values[i] - deq_slice[i]).abs() < 0.02);
+    }
+}
+
+#[test]
+fn test_q4_imatrix_and_matvec_fused() {
+    use harness_core::DType;
+    use harness_quant::{ISQEngine, QuantTarget};
+
+    let device = Device::Cpu;
+    let rows = 16;
+    let cols = 64;
+    let values: Vec<f32> = (0..(rows * cols))
+        .map(|i| ((i as f32) * 0.073).cos() * 2.0)
+        .collect();
+    let importance: Vec<f32> = (0..cols)
+        .map(|c| if c % 8 == 0 { 50.0 } else { 1.0 })
+        .collect();
+
+    let tensor = Tensor::from_f32_slice(&values, vec![rows, cols], device).unwrap();
+    let q4 = QuantizedQ4Tensor::from_f32_tensor_imatrix(&tensor, &importance).unwrap();
+
+    let x: Vec<f32> = (0..cols).map(|i| (i as f32) * 0.05 - 1.0).collect();
+    let y_fused = q4.matvec_fused(&x).unwrap();
+    assert_eq!(y_fused.len(), rows);
+
+    // Compare fused in-register matvec against dequantized reference GEMV
+    let deq = q4.dequantize().unwrap();
+    let deq_w = deq.as_f32_slice().unwrap();
+    for (r, &y_val) in y_fused.iter().enumerate().take(rows) {
+        let mut expected = 0.0f32;
+        for (c, &x_val) in x.iter().enumerate().take(cols) {
+            expected += deq_w[r * cols + c] * x_val;
+        }
+        assert!(
+            (y_val - expected).abs() < 1e-3,
+            "Mismatch at row {}: {} vs {}",
+            r,
+            y_val,
+            expected
+        );
+    }
+
+    // Verify ISQEngine promotes high-salience projections (ffn_down / attn_v)
+    let isq = ISQEngine::new(QuantTarget::Balanced);
+    let prof = isq.profile_layer("blk.5.ffn_down.weight", &tensor).unwrap();
+    assert_eq!(prof.target_dtype, DType::FP8E4M3);
+}
+

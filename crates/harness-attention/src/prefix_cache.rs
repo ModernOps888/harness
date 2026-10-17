@@ -58,6 +58,12 @@ impl RadixPrefixCache {
                     reusable_blocks.extend_from_slice(&child.blocks);
                     curr = child;
                 } else {
+                    if match_count > 0 && !child.token_seq.is_empty() {
+                        let partial_blocks =
+                            (match_count * child.blocks.len()) / child.token_seq.len();
+                        matched_len += match_count;
+                        reusable_blocks.extend_from_slice(&child.blocks[..partial_blocks]);
+                    }
                     break;
                 }
             } else {
@@ -94,12 +100,27 @@ impl RadixPrefixCache {
                 .count();
 
             if common_len == child.token_seq.len() {
-                Self::insert_node(child, &tokens[common_len..], blocks, total_cached);
+                let rem_blocks = if blocks.len() > child.blocks.len()
+                    && blocks.starts_with(&child.blocks)
+                {
+                    &blocks[child.blocks.len()..]
+                } else {
+                    blocks
+                };
+                Self::insert_node(child, &tokens[common_len..], rem_blocks, total_cached);
             } else {
+                let orig_token_len = child.token_seq.len().max(1);
+                let orig_blocks = std::mem::take(&mut child.blocks);
+                let split_block_idx = (common_len * orig_blocks.len()) / orig_token_len;
+
+                let prefix_blocks = orig_blocks[..split_block_idx].to_vec();
+                let suffix_blocks = orig_blocks[split_block_idx..].to_vec();
+                child.blocks = prefix_blocks;
+
                 let split_token = child.token_seq[common_len];
                 let mut new_child = RadixNode::new(
                     child.token_seq[common_len..].to_vec(),
-                    std::mem::take(&mut child.blocks),
+                    suffix_blocks,
                 );
                 new_child.children = std::mem::take(&mut child.children);
 
@@ -108,10 +129,14 @@ impl RadixPrefixCache {
 
                 if common_len < tokens.len() {
                     let rem_first = tokens[common_len];
-                    let rem_node = RadixNode::new(
-                        tokens[common_len..].to_vec(),
-                        blocks.to_vec(),
-                    );
+                    let rem_blocks = if blocks.len() > split_block_idx
+                        && (split_block_idx == 0 || blocks.starts_with(&child.blocks))
+                    {
+                        blocks[split_block_idx..].to_vec()
+                    } else {
+                        blocks.to_vec()
+                    };
+                    let rem_node = RadixNode::new(tokens[common_len..].to_vec(), rem_blocks);
                     child.children.insert(rem_first, rem_node);
                     *total_cached += tokens.len() - common_len;
                 }
@@ -124,6 +149,7 @@ impl RadixPrefixCache {
             *total_cached += tokens.len();
         }
     }
+
 
     pub fn total_cached_tokens(&self) -> usize {
         self.total_cached_tokens

@@ -56,7 +56,37 @@ impl MmapModelLoader {
             return Err(HarnessError::ModelLoad("File too small for SafeTensors or GGUF".into()));
         }
 
-        // Check if SafeTensors format: first 8 bytes is u64 little-endian header length
+        // 1. Check if GGUF v2/v3 format: first 4 bytes == GGUF_MAGIC (0x46554747)
+        let magic = u32::from_le_bytes(self.mmap[0..4].try_into().unwrap_or([0; 4]));
+        if magic == crate::gguf::GGUF_MAGIC {
+            let meta = crate::gguf::GgufReader::parse_header(&self.mmap)?;
+            let data_start = meta.data_offset as usize;
+            for t in meta.tensors {
+                let dtype = match t.ggml_type {
+                    0 => DType::F32,
+                    1 => DType::F16,
+                    30 => DType::BF16,
+                    7 | 8 | 15 => DType::I8,
+                    _ => DType::I4,
+                };
+                let shape: Vec<usize> = t.dimensions.iter().map(|&d| d as usize).collect();
+                let byte_len = t.byte_size();
+                let start = data_start.saturating_add(t.offset as usize);
+                self.weights.insert(
+                    t.name.clone(),
+                    LoadedWeight {
+                        name: t.name,
+                        shape,
+                        dtype,
+                        byte_offset: start,
+                        byte_len,
+                    },
+                );
+            }
+            return Ok(());
+        }
+
+        // 2. Check if SafeTensors format: first 8 bytes is u64 little-endian header length
         let mut rdr = Cursor::new(&self.mmap[0..8]);
         let header_len = rdr.read_u64::<LittleEndian>().unwrap_or(0) as usize;
 

@@ -36,10 +36,10 @@ impl SpikingAttentionEngine {
             // Standard biological discrete LIF integration
             let mut v = self.decay_beta * prev_v + current;
 
-            // Spike emission and reset
+            // Spike emission and soft threshold subtraction (prevents post-spike key amnesia)
             if v >= self.spike_threshold {
                 spikes[i] = true;
-                v = self.reset_potential; // Refractory reset
+                v = (v - self.spike_threshold * 0.5).max(self.reset_potential);
             }
 
             self.membrane_potentials[i] = v;
@@ -47,6 +47,7 @@ impl SpikingAttentionEngine {
 
         spikes
     }
+
 
     /// Filter attention keys to only those that fired action potentials
     pub fn sparse_spike_indices(&self, spikes: &[bool]) -> Vec<usize> {

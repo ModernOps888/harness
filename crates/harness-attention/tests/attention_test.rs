@@ -157,4 +157,108 @@ fn test_radix_prefix_cache_branch_splitting() {
     // Query 3: partial match [1, 2, 5] should match prefix of length 2 ([1, 2])
     let (match3_len, _blocks3) = cache.match_prefix(&[1, 2, 5]);
     assert_eq!(match3_len, 2);
+
+    // Multi-block proportional split: 4 tokens across 2 blocks (2 tokens/block)
+    let mut cache2 = RadixPrefixCache::new();
+    cache2.insert(&[10, 20, 30, 40], &[101, 102]);
+    cache2.insert(&[10, 20, 50, 60], &[101, 202]);
+
+    // Shared 2-token prefix [10, 20] retains physical block [101]!
+    let (p_len, p_blocks) = cache2.match_prefix(&[10, 20, 99]);
+    assert_eq!(p_len, 2);
+    assert_eq!(p_blocks, vec![101]);
+
+    let (b1_len, b1_blocks) = cache2.match_prefix(&[10, 20, 30, 40]);
+    assert_eq!(b1_len, 4);
+    assert_eq!(b1_blocks, vec![101, 102]);
+
+    let (b2_len, b2_blocks) = cache2.match_prefix(&[10, 20, 50, 60]);
+    assert_eq!(b2_len, 4);
+    assert_eq!(b2_blocks, vec![101, 202]);
 }
+
+#[test]
+fn test_kv_cache_fp8_and_fp4_quantized_append_and_readback() {
+    use harness_attention::{KVCache, KVCacheCompression};
+    use harness_core::Tensor;
+
+    let k_data: Vec<f32> = (0..64).map(|v| (v as f32 - 32.0) * 0.25).collect();
+    let v_data: Vec<f32> = (0..64).map(|v| (v as f32 - 16.0) * 0.10).collect();
+    let k_new = Tensor::from_f32_slice(&k_data, vec![2, 2, 16], Device::Cpu).unwrap();
+    let v_new = Tensor::from_f32_slice(&v_data, vec![2, 2, 16], Device::Cpu).unwrap();
+
+    // FP8E4M3 KV Cache
+    let mut cache_fp8 =
+        KVCache::new(1, 2, 16, 8, Device::Cpu, KVCacheCompression::FP8E4M3).unwrap();
+    cache_fp8.append(&k_new, &v_new).unwrap();
+    assert_eq!(cache_fp8.current_len, 2);
+    assert_eq!(cache_fp8.memory_bytes(), 2 * 8 * 2 * 16); // 1 byte/elem = 512 bytes
+
+    let (k_act8, v_act8) = cache_fp8.get_active_kv().unwrap();
+    assert_eq!(k_act8.shape(), &[2, 2, 16]);
+    let k8_slice = k_act8.as_f32_slice().unwrap();
+    let v8_slice = v_act8.as_f32_slice().unwrap();
+    for i in 0..64 {
+        assert!((k8_slice[i] - k_data[i]).abs() < 0.6);
+        assert!((v8_slice[i] - v_data[i]).abs() < 0.3);
+    }
+
+    // FP4 KV Cache
+    let mut cache_fp4 = KVCache::new(1, 2, 16, 8, Device::Cpu, KVCacheCompression::FP4).unwrap();
+    cache_fp4.append(&k_new, &v_new).unwrap();
+    assert_eq!(cache_fp4.current_len, 2);
+    assert_eq!(cache_fp4.memory_bytes(), 2 * (8 * 2 * 16) / 2); // 0.5 byte/elem = 256 bytes
+
+    let (k_act4, v_act4) = cache_fp4.get_active_kv().unwrap();
+    assert_eq!(k_act4.shape(), &[2, 2, 16]);
+    let k4_slice = k_act4.as_f32_slice().unwrap();
+    let v4_slice = v_act4.as_f32_slice().unwrap();
+    for i in 0..64 {
+        assert!((k4_slice[i] - k_data[i]).abs() < 1.2);
+        assert!((v4_slice[i] - v_data[i]).abs() < 0.6);
+    }
+}
+
+#[test]
+fn test_flash_attention_v3_gqa_and_decode_causal_mask() {
+    use harness_attention::{flash_attention_v3, FlashAttentionConfig};
+    use harness_core::Tensor;
+
+    // Qwen2.5-Coder-32B GQA ratio 5:1 (e.g., 5 query heads, 1 KV head, head_dim = 4)
+    // Decode step: seq_len_q = 1, seq_len_kv = 4
+    let config = FlashAttentionConfig::new(5, 1, 4);
+    let q = Tensor::from_f32_slice(&[1.0f32; 5 * 4], vec![1, 5, 4], Device::Cpu).unwrap();
+
+    // Token 0..2 have V = 0.0, Token 3 (the latest token in KV cache) has huge K and V = 10.0
+    let mut k_data = vec![0.0f32; 4 * 4];
+    let mut v_data = vec![0.0f32; 4 * 4];
+    for d in 0..4 {
+        k_data[3 * 4 + d] = 10.0;
+        v_data[3 * 4 + d] = 10.0;
+    }
+    let k = Tensor::from_f32_slice(&k_data, vec![4, 1, 4], Device::Cpu).unwrap();
+    let v = Tensor::from_f32_slice(&v_data, vec![4, 1, 4], Device::Cpu).unwrap();
+
+    let out = flash_attention_v3(&q, &k, &v, &config).unwrap();
+    assert_eq!(out.shape(), &[1, 5, 4]);
+    let out_slice = out.as_f32_slice().unwrap();
+    // Because decode query at seq_len_q=1 attends across all 4 KV tokens [0..=3],
+    // token 3 dominates the softmax and output must be ~10.0 (not 0.0!)
+    assert!(out_slice[0] > 9.9, "Causal decode mask failed to attend to tail KV tokens: {}", out_slice[0]);
+}
+
+#[test]
+fn test_spiking_attention_soft_reset_no_key_amnesia() {
+    use harness_attention::SpikingAttentionEngine;
+
+    let mut engine = SpikingAttentionEngine::new(0.90, 0.50, 0.0);
+    // High-salience syntax token receives strong synaptic current across two consecutive decode steps
+    let step1 = engine.step_spikes(&[0.60, 0.10]);
+    assert_eq!(step1, vec![true, false]);
+
+    // With soft threshold subtraction, remaining potential is 0.60 - 0.25 = 0.35,
+    // so a moderate current (0.25) on step 2 still fires (0.90 * 0.35 + 0.25 = 0.565 >= 0.50)!
+    let step2 = engine.step_spikes(&[0.25, 0.10]);
+    assert_eq!(step2, vec![true, false]);
+}
+

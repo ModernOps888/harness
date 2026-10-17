@@ -125,6 +125,11 @@ pub struct SpeculativeBenchmarkResult {
     pub speculative_tok_per_sec: f32,
 }
 
+/// Canonical GGUF vocabulary size for `qwen2.5-coder:1.5b` (drafter) and `qwen3` models
+pub const QWEN25_CODER_DRAFT_VOCAB_SIZE: usize = 151_936;
+/// Canonical GGUF padded vocabulary size for `qwen2.5-coder:32b` (target verifier)
+pub const QWEN25_CODER_TARGET_VOCAB_SIZE: usize = 152_064;
+
 /// Configuration for Entropy-Gated Adaptive Speculative Decoding.
 /// Dynamically modulates draft depth K based on Shannon entropy / draft uncertainty,
 /// preventing wasted target verification passes on uncertain tokens while expanding depth
@@ -152,6 +157,33 @@ impl Default for AdaptiveSpeculativeConfig {
     }
 }
 
+impl AdaptiveSpeculativeConfig {
+    /// Tuned profile for `qwen2.5-coder:32b` (verifier) + `qwen2.5-coder:1.5b` (drafter)
+    pub fn qwen2_5_coder_32b_profile() -> Self {
+        Self {
+            min_depth: 2,
+            max_depth: 6,
+            initial_depth: 4,
+            low_entropy_thresh: 0.45,
+            high_entropy_thresh: 1.6,
+            abort_entropy_thresh: 2.2,
+        }
+    }
+
+    /// Export adaptive thresholds as `llama-server` speculative decoding CLI flags
+    pub fn to_llama_server_args(&self) -> Vec<String> {
+        let p_min = (-0.5 * self.high_entropy_thresh).exp().clamp(0.40, 0.90);
+        vec![
+            "--draft-max".to_string(),
+            self.max_depth.to_string(),
+            "--draft-min".to_string(),
+            self.min_depth.to_string(),
+            "--draft-p-min".to_string(),
+            format!("{:.2}", p_min),
+        ]
+    }
+}
+
 /// Result of an entropy-gated adaptive verification step
 #[derive(Debug, Clone)]
 pub struct AdaptiveVerificationResult {
@@ -168,6 +200,9 @@ pub struct AdaptiveVerificationResult {
 pub struct AdaptiveSpeculativeDecoder {
     pub config: AdaptiveSpeculativeConfig,
     pub current_depth: usize,
+    /// Empirical batch verification scaling factor gamma: T_verify(K+1) = T_step(1) * (1 + gamma * K).
+    /// On DDR4 memory-bandwidth-bound 27B-35B models, gamma is ~0.04 - 0.06.
+    pub verification_gamma: f32,
     pub total_accepted_tokens: usize,
     pub total_drafted_tokens: usize,
     pub total_wasted_tokens: usize,
@@ -180,11 +215,48 @@ impl AdaptiveSpeculativeDecoder {
         Self {
             config,
             current_depth,
+            verification_gamma: 0.05,
             total_accepted_tokens: 0,
             total_drafted_tokens: 0,
             total_wasted_tokens: 0,
             total_steps: 0,
         }
+    }
+
+    /// Set the empirical batch verification scaling factor gamma:
+    /// T_verify(K+1) = T_step(1) * (1 + gamma * K)
+    pub fn with_verification_gamma(mut self, gamma: f32) -> Self {
+        self.verification_gamma = gamma.max(0.0);
+        self
+    }
+
+    /// Compute target model verification latency for K drafted tokens (+1 bonus token):
+    /// T_verify(K+1) = T_step(1) * (1 + gamma * K)
+    pub fn verification_latency_ms(&self, target_single_step_ms: f32, draft_k: usize) -> f32 {
+        target_single_step_ms * (1.0 + self.verification_gamma * (draft_k as f32))
+    }
+
+    /// Generate `llama-server` CLI arguments (`--draft-max`, `--draft-min`, `--draft-p-min`)
+    pub fn to_llama_server_args(&self) -> Vec<String> {
+        self.config.to_llama_server_args()
+    }
+
+    /// Align vocabulary logit slices between a drafter (`Qwen2.5-Coder-1.5B`, vocab=151936)
+    /// and a tensor-parallel padded verifier (`Qwen2.5-Coder-32B`, vocab=152064) by slicing
+    /// both distributions to `min(draft_vocab, target_vocab) = 151936`.
+    pub fn align_vocab_logits<'a>(
+        draft_logits: &'a [f32],
+        target_logits: &'a [f32],
+    ) -> (&'a [f32], &'a [f32], usize) {
+        let common_vocab = draft_logits
+            .len()
+            .min(target_logits.len())
+            .min(QWEN25_CODER_DRAFT_VOCAB_SIZE);
+        (
+            &draft_logits[..common_vocab],
+            &target_logits[..common_vocab],
+            common_vocab,
+        )
     }
 
     /// Calculate dynamic draft length based on per-token Shannon entropies.
@@ -217,8 +289,9 @@ impl AdaptiveSpeculativeDecoder {
         let mut mismatch_occurred = false;
 
         for i in 0..effective_len {
-            let draft_tok = drafts[i];
-            let target_tok = target_predictions[i];
+            // Clamp any padded token IDs (>= 151936) to the shared vocabulary range
+            let draft_tok = drafts[i].min(QWEN25_CODER_DRAFT_VOCAB_SIZE as u32 - 1);
+            let target_tok = target_predictions[i].min(QWEN25_CODER_DRAFT_VOCAB_SIZE as u32 - 1);
 
             if draft_tok == target_tok {
                 accepted.push(draft_tok);
@@ -351,13 +424,15 @@ impl AdaptiveSpeculativeDecoder {
             adaptive_emitted += result.accepted_tokens.len();
         }
 
-        let static_time_ms = num_steps as f32 * (target_step_ms + static_depth as f32 * draft_step_ms);
+        let static_verify_ms = self.verification_latency_ms(target_step_ms, static_depth);
+        let static_time_ms = num_steps as f32 * (static_verify_ms + static_depth as f32 * draft_step_ms);
         let avg_adaptive_depth = if self.total_steps > 0 {
             self.total_drafted_tokens as f32 / self.total_steps as f32
         } else {
             static_depth as f32
         };
-        let adaptive_time_ms = num_steps as f32 * (target_step_ms + avg_adaptive_depth * draft_step_ms);
+        let adaptive_verify_ms = target_step_ms * (1.0 + self.verification_gamma * avg_adaptive_depth);
+        let adaptive_time_ms = num_steps as f32 * (adaptive_verify_ms + avg_adaptive_depth * draft_step_ms);
 
         let static_tok_per_sec = (static_emitted as f32 / static_time_ms) * 1000.0;
         let adaptive_tok_per_sec = (adaptive_emitted as f32 / adaptive_time_ms) * 1000.0;
@@ -402,4 +477,5 @@ pub struct AdaptiveComparisonReport {
     pub adaptive_tok_per_sec: f32,
     pub speedup_factor: f32,
 }
+
 

@@ -40,8 +40,8 @@ fn rope_forward(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let sin_t = sin(theta);
 
     let base_offset = (token_idx * params.num_heads + head_idx) * params.head_dim;
-    let idx0 = base_offset + 2u * i;
-    let idx1 = base_offset + 2u * i + 1u;
+    let idx0 = base_offset + i;
+    let idx1 = base_offset + i + pairs_per_head;
 
     let x0 = input_t[idx0];
     let x1 = input_t[idx1];

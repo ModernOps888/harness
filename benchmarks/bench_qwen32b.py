@@ -213,7 +213,7 @@ def run_test_config(name, model_path, server_args):
         # Warm-up pass
         warm = http_json("/completion", {
             "prompt": CHATML_TEMPLATE.format(p="fn test() {}"),
-            "n_predict": 8, "temperature": 0.0, "top_k": 1, "seed": 1, "cache_prompt": False
+            "n_predict": 8, "temperature": 0.0, "top_k": 1, "seed": 1, "cache_prompt": True
         })
         with open(os.path.join(cfg_dir, "response_warmup.json"), "wb") as f:
             f.write(warm)
@@ -226,7 +226,7 @@ def run_test_config(name, model_path, server_args):
                 "temperature": 0.0,
                 "top_k": 1,
                 "seed": 1,
-                "cache_prompt": False,
+                "cache_prompt": True,
                 "stream": False
             }
             t0 = time.time()
@@ -402,11 +402,44 @@ def main():
         "--spec-ngram-simple-size-m", "8"
     ])
 
+    # Config 5: Ultra-Parallel Speculative Decoding (M=K+1 Batched Micro-GEMM + Asymmetric KV + Confidence Gating)
+    run_test_config("c4_ultra_parallel_spec", model_32b, [
+        "-c", "2048", "-t", "6", "-tb", "10", "--no-op-offload",
+        "-ctk", "q8_0", "-ctv", "q4_0", "-fa", "on", "-b", "256", "-ub", "128",
+        "--cache-reuse", "64",
+        "-ngl", "18",
+        "--model-draft", MODEL_DRAFT_1_5B,
+        "-ngld", "99",
+        "-ctkd", "q8_0",
+        "-ctvd", "q4_0",
+        "--spec-draft-n-max", "6",
+        "--spec-draft-n-min", "1",
+        "--spec-draft-p-min", "0.68",
+        "--spec-type", "draft-simple"
+    ])
+
     summarize()
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "summary":
+        summarize()
+    elif len(sys.argv) > 1 and sys.argv[1] == "c4":
+        model_32b = resolve_32b_model()
+        run_test_config("c4_ultra_parallel_spec", model_32b, [
+            "-c", "2048", "-t", "6", "-tb", "10", "--no-op-offload",
+            "-ctk", "q8_0", "-ctv", "q4_0", "-fa", "on", "-b", "256", "-ub", "128",
+            "--cache-reuse", "64",
+            "-ngl", "18",
+            "--model-draft", MODEL_DRAFT_1_5B,
+            "-ngld", "99",
+            "-ctkd", "q8_0",
+            "-ctvd", "q4_0",
+            "--spec-draft-n-max", "6",
+            "--spec-draft-n-min", "1",
+            "--spec-draft-p-min", "0.68",
+            "--spec-type", "draft-simple"
+        ])
         summarize()
     else:
         main()

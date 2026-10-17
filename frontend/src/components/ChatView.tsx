@@ -60,10 +60,10 @@ export const ChatView: React.FC<Props> = ({
             </p>
             <div className="flex flex-wrap gap-2 justify-center max-w-lg">
               {[
-                'Benchmark 70B layer streaming speed',
-                'Demonstrate strict JSON schema constrained decoding',
-                'Explain how PagedAttention reduces KV waste to <2%',
-                'Test real-time Shannon entropy hallucination detection',
+                'Benchmark Qwen2.5-Coder-32B + 1.5B speculative speed (2.99-3.65 tok/s)',
+                'Demonstrate strict JSON/Rust AST constrained code verification',
+                'Explain how Q8_0/Q4_0 FlashAttention fits +3 GPU layers in 8GB VRAM',
+                'Write a lock-free work-stealing deque in Rust with ABA epoch protection',
               ].map((pill, idx) => (
                 <button
                   key={idx}

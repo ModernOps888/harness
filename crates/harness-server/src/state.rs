@@ -22,6 +22,7 @@ pub struct AppState {
     pub backend: Arc<BackendProxy>,
     pub start_time: Instant,
     pub total_tokens_streamed: Arc<AtomicUsize>,
+    pub last_measured_tok_s: Arc<RwLock<f32>>,
 }
 
 impl AppState {
@@ -33,12 +34,12 @@ impl AppState {
         let batcher = Arc::new(Mutex::new(BatchedInferenceEngine::new(64)));
         let speculative = Arc::new(Mutex::new(SpeculativeDecoder::new(4)));
         let confidence_scorer = Arc::new(ConfidenceScorer::new(0.85));
-        let rag_store = Arc::new(VectorStore::new(4096));
+        let rag_store = Arc::new(VectorStore::new(5120));
         let backend = Arc::new(BackendProxy::new(BackendConfig::default()));
 
         Self {
-            model_name: Arc::new(RwLock::new("Qwen3.8-27B-ISQ".into())),
-            model_config: Arc::new(RwLock::new(ModelConfig::qwen3_27b())),
+            model_name: Arc::new(RwLock::new("qwen2.5-coder:32b".into())),
+            model_config: Arc::new(RwLock::new(ModelConfig::qwen2_5_coder_32b())),
             device_mgr,
             paged_attn,
             prefix_cache,
@@ -49,6 +50,7 @@ impl AppState {
             backend,
             start_time: Instant::now(),
             total_tokens_streamed: Arc::new(AtomicUsize::new(0)),
+            last_measured_tok_s: Arc::new(RwLock::new(0.0)),
         }
     }
 
@@ -59,6 +61,14 @@ impl AppState {
 
     pub fn record_tokens(&self, count: usize) {
         self.total_tokens_streamed.fetch_add(count, Ordering::Relaxed);
+    }
+
+    pub fn record_throughput(&self, tok_s: f32) {
+        if tok_s > 0.0 {
+            if let Ok(mut guard) = self.last_measured_tok_s.write() {
+                *guard = tok_s;
+            }
+        }
     }
 }
 

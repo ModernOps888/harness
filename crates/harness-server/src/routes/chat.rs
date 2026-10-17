@@ -4,6 +4,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Json;
 use futures_util::Stream;
 use harness_core::{Device, Tensor};
+use harness_pipeline::{CodeQualityEngine, Language};
 use harness_safety::{EntropyDetector, LateralInhibitionFilter};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -70,7 +71,7 @@ pub struct ChatCompletionResponse {
 // ---------------------------------------------------------------------------
 
 /// Post-process real LLM output with HARNESS enhancements.
-/// Returns (enhanced_text, confidence_score, entropy).
+/// Returns (confidence_score, entropy).
 pub fn apply_harness_enhancements(
     text: &str,
     lateral_contrast: f32,
@@ -126,6 +127,65 @@ pub fn apply_harness_enhancements(
     let final_confidence = (confidence * 0.7 + (1.0 - logit_entropy * 0.1) * 0.3).clamp(0.1, 1.0);
 
     (final_confidence, normalized_entropy)
+}
+
+/// Apply CodeQualityEngine delimiter verification and auto-repair when constrained_mode is enabled
+fn apply_code_verification(text: &str, constrained_mode: Option<&str>) -> String {
+    let mode = constrained_mode.unwrap_or("").trim().to_lowercase();
+    if mode.is_empty() || mode == "none" || mode == "false" {
+        return text.to_string();
+    }
+    if mode == "json" || mode == "true" {
+        let check = CodeQualityEngine::verify_syntax(text, Language::Json);
+        if !check.is_valid {
+            if let Some(repaired) = check.repaired_code {
+                return repaired;
+            }
+        }
+    } else {
+        let lang = Language::from_tag(&mode);
+        let check = CodeQualityEngine::verify_syntax(text, lang);
+        if !check.is_valid {
+            if let Some(repaired) = check.repaired_code {
+                return repaired;
+            }
+        }
+    }
+    text.to_string()
+}
+
+/// Record KV block allocation and prefix cache entry for an active request
+fn record_kv_telemetry(state: &AppState, req_uuid: Uuid, messages: &[(String, String)], total_tokens: usize) {
+    let prefix_tokens: Vec<u32> = messages
+        .iter()
+        .flat_map(|(_, content)| content.bytes().take(64).map(|b| b as u32))
+        .take(128)
+        .collect();
+
+    let blocks_needed = total_tokens.div_ceil(16).clamp(1, 32);
+    let mut allocated_blocks = Vec::with_capacity(blocks_needed);
+
+    if let Ok(mut paged) = state.paged_attn.lock() {
+        // Keep pool healthy by freeing if low on blocks
+        if paged.free_block_count() < blocks_needed {
+            return;
+        }
+        for _ in 0..blocks_needed {
+            if let Ok(bid) = paged.allocate_block(req_uuid) {
+                allocated_blocks.push(bid);
+            }
+        }
+        paged.record_tokens(&req_uuid, total_tokens);
+    }
+
+    if !prefix_tokens.is_empty() && !allocated_blocks.is_empty() {
+        if let Ok(mut cache) = state.prefix_cache.lock() {
+            let (matched, _) = cache.match_prefix(&prefix_tokens);
+            if matched < prefix_tokens.len() {
+                cache.insert(&prefix_tokens, &allocated_blocks);
+            }
+        }
+    }
 }
 
 /// Compact conversation history to reduce token count.
@@ -193,13 +253,22 @@ pub async fn chat_completions(
     State(state): State<AppState>,
     Json(req): Json<ChatCompletionRequest>,
 ) -> Response {
-    let req_id = format!("chatcmpl-{}", Uuid::new_v4());
+    let req_uuid = Uuid::new_v4();
+    let req_id = format!("chatcmpl-{}", req_uuid);
     let current_model = req.model.unwrap_or_else(|| state.model_name.read().unwrap().clone());
     let stream_mode = req.stream.unwrap_or(false);
     let temperature = req.temperature.unwrap_or(0.7);
     let max_tokens = req.max_tokens;
     let lateral_contrast = req.lateral_contrast.unwrap_or(1.8);
     let spiking_th = req.spiking_threshold.unwrap_or(0.35);
+    let constrained_mode = req.constrained_mode.clone();
+
+    // Update active model name in state
+    if !current_model.is_empty() && current_model != "default" && current_model != "auto" {
+        if let Ok(mut active) = state.model_name.write() {
+            *active = current_model.clone();
+        }
+    }
 
     // Compact conversation history for efficiency (fewer tokens = faster inference)
     let messages = compact_messages(&req.messages, 5);
@@ -213,10 +282,10 @@ pub async fn chat_completions(
         let error_msg = format!(
             "No LLM backend is running. HARNESS needs a real inference backend to generate responses.\n\n\
             Start one of:\n\
-            - Ollama: `ollama serve` (then `ollama pull llama3.3:70b-instruct-q4_K_M`)\n\
-            - llama.cpp server: `llama-server -m model.gguf --port 1234`\n\
-            - LM Studio: Start and load a model\n\
-            - vLLM: `vllm serve model-name --port 8000`\n\n\
+            - HARNESS 32B Coder Speculative Engine (port 8089): `./launch_qwen32b_coder.ps1` or `python server_runner.py`\n\
+            - Ollama (port 11434): `ollama serve` (then `ollama pull qwen2.5-coder:32b`)\n\
+            - llama.cpp server: `llama-server -m model.gguf --port 8089`\n\
+            - vLLM: `vllm serve Qwen/Qwen2.5-Coder-32B-Instruct --port 8000`\n\n\
             Then restart HARNESS or it will auto-detect on next request.\n\n\
             Tried: {}", state.backend.config.base_url
         );
@@ -247,6 +316,7 @@ pub async fn chat_completions(
 
     if stream_mode {
         // Stream real tokens from backend via SSE
+        record_kv_telemetry(&state, req_uuid, &messages, prompt_tokens.max(16));
         let stream = stream_from_backend(
             req_id,
             current_model,
@@ -270,9 +340,14 @@ pub async fn chat_completions(
             temperature,
             max_tokens,
         ).await {
-            Ok((content, backend_metrics)) => {
+            Ok((raw_content, backend_metrics)) => {
                 let elapsed = start.elapsed();
-                let completion_tokens = content.split_whitespace().count();
+                let content = apply_code_verification(&raw_content, constrained_mode.as_deref());
+                let completion_tokens = if backend_metrics.eval_tokens > 0 {
+                    backend_metrics.eval_tokens as usize
+                } else {
+                    content.split_whitespace().count()
+                };
 
                 // Apply HARNESS enhancements on real output
                 let (confidence, _entropy) = apply_harness_enhancements(
@@ -291,6 +366,8 @@ pub async fn chat_completions(
                 };
 
                 state.record_tokens(completion_tokens);
+                state.record_throughput(tok_per_sec as f32);
+                record_kv_telemetry(&state, req_uuid, &messages, prompt_tokens + completion_tokens);
 
                 let response = ChatCompletionResponse {
                     id: req_id,
@@ -431,6 +508,7 @@ fn stream_from_backend(
                         let _ = sse_tx.send(Ok(done_event)).await;
 
                         state.record_tokens(token_count);
+                        state.record_throughput(tok_per_sec as f32);
                         break;
                     }
 

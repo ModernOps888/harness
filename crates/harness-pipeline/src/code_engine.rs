@@ -222,49 +222,102 @@ impl CodeQualityEngine {
         }
     }
 
-    /// Deterministically repair unclosed brackets and quotes
+    /// Deterministically repair unclosed brackets and quotes while respecting
+    /// line comments (`//`), block comments (`/* ... */`), and Rust lifetime annotations (`'a`, `'static`, `'_`).
     pub fn repair_delimiters(code: &str) -> (String, Vec<char>) {
+        let chars: Vec<char> = code.chars().collect();
+        let n = chars.len();
         let mut stack = Vec::new();
         let mut in_string = false;
         let mut quote_char = ' ';
         let mut escape_next = false;
+        let mut in_line_comment = false;
+        let mut in_block_comment = false;
 
-        for ch in code.chars() {
-            if escape_next {
-                escape_next = false;
+        let mut i = 0;
+        while i < n {
+            let ch = chars[i];
+
+            if in_line_comment {
+                if ch == '\n' {
+                    in_line_comment = false;
+                }
+                i += 1;
                 continue;
             }
-            if ch == '\\' {
-                escape_next = true;
-                continue;
-            }
-            if ch == '"' || ch == '\'' {
-                if in_string {
-                    if ch == quote_char {
-                        in_string = false;
-                    }
+
+            if in_block_comment {
+                if ch == '*' && i + 1 < n && chars[i + 1] == '/' {
+                    in_block_comment = false;
+                    i += 2;
                 } else {
-                    in_string = true;
-                    quote_char = ch;
+                    i += 1;
                 }
                 continue;
             }
 
-            if !in_string {
-                match ch {
-                    '{' => stack.push('}'),
-                    '(' => stack.push(')'),
-                    '[' => stack.push(']'),
-                    '}' | ')' | ']' => {
-                        if let Some(&expected) = stack.last() {
-                            if expected == ch {
-                                stack.pop();
-                            }
+            if in_string {
+                if escape_next {
+                    escape_next = false;
+                } else if ch == '\\' {
+                    escape_next = true;
+                } else if ch == quote_char {
+                    in_string = false;
+                }
+                i += 1;
+                continue;
+            }
+
+            // Detect start of line comment `//` or block comment `/*`
+            if ch == '/' && i + 1 < n {
+                if chars[i + 1] == '/' {
+                    in_line_comment = true;
+                    i += 2;
+                    continue;
+                } else if chars[i + 1] == '*' {
+                    in_block_comment = true;
+                    i += 2;
+                    continue;
+                }
+            }
+
+            if ch == '"' {
+                in_string = true;
+                quote_char = '"';
+                i += 1;
+                continue;
+            }
+
+            if ch == '\'' {
+                // Distinguish Rust lifetime annotations (`'a`, `'static`, `'_`) from character/string literals
+                if Self::is_rust_lifetime(&chars, i) {
+                    i += 1;
+                    while i < n && (chars[i].is_alphanumeric() || chars[i] == '_') {
+                        i += 1;
+                    }
+                    continue;
+                }
+                in_string = true;
+                quote_char = '\'';
+                i += 1;
+                continue;
+            }
+
+            match ch {
+                '{' => stack.push('}'),
+                '(' => stack.push(')'),
+                '[' => stack.push(']'),
+                '}' | ')' | ']' => {
+                    if let Some(&expected) = stack.last() {
+                        if expected == ch {
+                            stack.pop();
                         }
                     }
-                    _ => {}
                 }
+                _ => {}
             }
+
+            i += 1;
         }
 
         let mut repaired = code.to_string();
@@ -279,4 +332,35 @@ impl CodeQualityEngine {
 
         (repaired, unclosed)
     }
+
+    /// Returns true if the single quote at `chars[pos]` is a Rust lifetime annotation
+    /// such as `'a`, `'static`, `'_`, `&'a`, `<'a, 'b>`, rather than a char/string literal.
+    fn is_rust_lifetime(chars: &[char], pos: usize) -> bool {
+        let n = chars.len();
+        if pos + 1 >= n {
+            return false;
+        }
+        let next = chars[pos + 1];
+        if !(next.is_alphabetic() || next == '_') {
+            return false;
+        }
+        // Walk across the identifier following `'`
+        let mut end = pos + 2;
+        while end < n && (chars[end].is_alphanumeric() || chars[end] == '_') {
+            end += 1;
+        }
+        // If immediately closed by `'`, it is a char literal (e.g. `'a'`) or single-word string (`'hello'`)
+        if end < n && chars[end] == '\'' {
+            return false;
+        }
+        // Check preceding context typical of Rust lifetimes (`&'a`, `<'a`, `+'a`, `: 'a`, `, 'a`)
+        if pos > 0 {
+            let prev = chars[pos - 1];
+            if matches!(prev, '&' | '<' | '+' | ':' | ',' | '(' | '[' | ' ' | '\t' | '\n') {
+                return true;
+            }
+        }
+        false
+    }
 }
+

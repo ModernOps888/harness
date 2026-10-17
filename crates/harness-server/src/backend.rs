@@ -38,14 +38,36 @@ impl Default for BackendConfig {
 }
 
 impl BackendConfig {
-    /// Auto-detect available backends by probing known ports
+    /// Auto-detect available backends by probing known ports (prioritizing port 8089 32B Coder Speculative Server)
     pub async fn auto_detect() -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(2))
             .build()
             .unwrap_or_default();
 
-        // 1. Try Ollama (port 11434)
+        // 1. Highest Priority: Dedicated HARNESS Qwen2.5-Coder-32B + 1.5B Speculative llama-server (port 8089)
+        if let Ok(resp) = client.get("http://127.0.0.1:8089/health").send().await {
+            if resp.status().is_success() {
+                return Self {
+                    base_url: "http://127.0.0.1:8089".to_string(),
+                    backend_type: BackendType::OpenAICompatible,
+                    timeout_secs: 600,
+                    api_key: None,
+                };
+            }
+        }
+        if let Ok(resp) = client.get("http://127.0.0.1:8089/v1/models").send().await {
+            if resp.status().is_success() {
+                return Self {
+                    base_url: "http://127.0.0.1:8089".to_string(),
+                    backend_type: BackendType::OpenAICompatible,
+                    timeout_secs: 600,
+                    api_key: None,
+                };
+            }
+        }
+
+        // 2. Try Ollama (port 11434)
         if let Ok(resp) = client.get("http://localhost:11434/api/tags").send().await {
             if resp.status().is_success() {
                 return Self {
@@ -57,7 +79,7 @@ impl BackendConfig {
             }
         }
 
-        // 2. Try llama.cpp server / LM Studio (port 1234)
+        // 3. Try llama.cpp server / LM Studio (port 1234)
         if let Ok(resp) = client.get("http://localhost:1234/v1/models").send().await {
             if resp.status().is_success() {
                 return Self {
@@ -69,7 +91,7 @@ impl BackendConfig {
             }
         }
 
-        // 3. Try vLLM / generic (port 8000)
+        // 4. Try vLLM / generic (port 8000)
         if let Ok(resp) = client.get("http://localhost:8000/v1/models").send().await {
             if resp.status().is_success() {
                 return Self {
@@ -92,12 +114,20 @@ impl BackendConfig {
             .build()
             .unwrap_or_default();
 
-        let health_url = match self.backend_type {
-            BackendType::Ollama => format!("{}/api/tags", self.base_url),
-            BackendType::OpenAICompatible => format!("{}/v1/models", self.base_url),
-        };
-
-        client.get(&health_url).send().await.map(|r| r.status().is_success()).unwrap_or(false)
+        match self.backend_type {
+            BackendType::Ollama => {
+                let url = format!("{}/api/tags", self.base_url);
+                client.get(&url).send().await.map(|r| r.status().is_success()).unwrap_or(false)
+            }
+            BackendType::OpenAICompatible => {
+                let models_url = format!("{}/v1/models", self.base_url);
+                if client.get(&models_url).send().await.map(|r| r.status().is_success()).unwrap_or(false) {
+                    return true;
+                }
+                let health_url = format!("{}/health", self.base_url);
+                client.get(&health_url).send().await.map(|r| r.status().is_success()).unwrap_or(false)
+            }
+        }
     }
 
     /// Get the chat completions endpoint URL
@@ -108,28 +138,42 @@ impl BackendConfig {
         }
     }
 
-    /// Map a HARNESS model name to the backend's model identifier
+    /// Map a HARNESS model name to the backend's model identifier (prioritizing 27B-35B Coder models)
     pub fn resolve_model_name(&self, harness_model: &str) -> String {
         match self.backend_type {
             BackendType::Ollama => {
-                // Map HARNESS display names to Ollama model tags
+                let lower = harness_model.trim().to_lowercase();
                 match harness_model {
-                    m if m.contains("671B") => "deepseek-r1:671b".to_string(),
-                    m if m.contains("70B") || m.contains("Scout") => "llama3.3:70b-instruct-q4_K_M".to_string(),
-                    m if m.contains("72B") => "qwen2.5:72b-instruct-q4_K_M".to_string(),
-                    m if m.contains("27B") || m.contains("Qwen3") => "qwen2.5:32b".to_string(),
-                    m if m.contains("14B") || m.contains("Phi") => "phi4:14b".to_string(),
+                    _ if lower.is_empty() || lower == "default" || lower == "auto" => {
+                        "qwen2.5-coder:32b".to_string()
+                    }
+                    _ if lower.contains("32b") || lower.contains("27b") || lower.contains("qwen3") => {
+                        "qwen2.5-coder:32b".to_string()
+                    }
+                    _ if lower.contains("33b") => "deepseek-coder:33b".to_string(),
+                    _ if lower.contains("30b") || lower.contains("a3b") => "qwen3:30b-a3b".to_string(),
+                    _ if lower.contains("14b") => "qwen2.5-coder:14b-instruct-q4_K_S".to_string(),
+                    _ if lower.contains("1.5b") => "qwen2.5-coder:1.5b".to_string(),
+                    _ if lower.contains("7b") => "qwen2.5-coder:7b".to_string(),
+                    _ if lower.contains("coder") || lower.contains("code") => "qwen2.5-coder:32b".to_string(),
+                    m if m.contains("671B") || lower.contains("671b") => "deepseek-r1:671b".to_string(),
+                    m if m.contains("70B") || lower.contains("70b") || m.contains("Scout") => {
+                        "llama3.1:70b-instruct-q2_K".to_string()
+                    }
+                    m if m.contains("72B") || lower.contains("72b") => "qwen2.5:72b-instruct-q4_K_M".to_string(),
+                    m if m.contains("Phi") => "phi4:14b".to_string(),
                     m if m.contains("Mixtral") => "mixtral:8x22b".to_string(),
                     m if m.contains("Flash") => "deepseek-r1:8b".to_string(),
-                    _ => {
-                        // Pass through as-is (user may have exact ollama tag)
-                        harness_model.to_lowercase().replace(" ", ":")
-                    }
+                    _ => harness_model.to_lowercase().replace(' ', ":"),
                 }
             }
             BackendType::OpenAICompatible => {
-                // OpenAI-compatible servers usually accept the model name directly
-                harness_model.to_string()
+                let lower = harness_model.trim().to_lowercase();
+                if lower.is_empty() || lower == "default" || lower == "auto" {
+                    "qwen2.5-coder:32b".to_string()
+                } else {
+                    harness_model.to_string()
+                }
             }
         }
     }
@@ -280,13 +324,13 @@ impl BackendProxy {
         }
     }
 
-    /// Resolve requested model name against actual models installed on backend
+    /// Resolve requested model name against actual models installed on backend (prioritizing 27B-35B Coder models)
     pub async fn resolve_model_smart(&self, requested: &str) -> String {
         let req_clean = requested.trim().to_lowercase();
 
         // 0. Active Resident Memory Check:
-        // If a model is ALREADY resident and active in memory (e.g. 70B loaded),
-        // and the user requested a generic placeholder ("qwen3.8-27b-isq", "default", "", "auto")
+        // If a model is ALREADY resident and active in memory (e.g. 32B Coder loaded),
+        // and the user requested a generic placeholder ("qwen2.5-coder:32b", "default", "", "auto")
         // or a model keyword matching what is already warm, REUSE IT immediately to prevent eviction thrashing!
         let running = self.running_models().await;
         if let Some(resident) = running.first() {
@@ -294,11 +338,11 @@ impl BackendProxy {
             if req_clean.is_empty()
                 || req_clean == "default"
                 || req_clean == "auto"
-                || req_clean.contains("27b")
-                || req_clean.contains("isq")
+                || (req_clean.contains("32b") && res_clean.contains("32b"))
+                || (req_clean.contains("27b") && (res_clean.contains("27b") || res_clean.contains("32b")))
                 || (req_clean.contains("70b") && res_clean.contains("70b"))
                 || (req_clean.contains("llama") && res_clean.contains("llama"))
-                || (req_clean.contains("qwen") && res_clean.contains("qwen"))
+                || (req_clean.contains("qwen") && res_clean.contains("qwen") && !res_clean.contains("1.5b"))
             {
                 return resident.clone();
             }
@@ -317,15 +361,68 @@ impl BackendProxy {
             return exact.clone();
         }
 
-        // 2. Keyword matching
+        // 2. Keyword matching (27B-35B Coder Tier prioritized first!)
+        if req_clean.is_empty()
+            || req_clean == "default"
+            || req_clean == "auto"
+            || req_clean.contains("32b")
+            || req_clean.contains("27b")
+            || req_clean.contains("33b")
+            || req_clean.contains("35b")
+            || req_clean.contains("coder")
+            || req_clean.contains("code")
+        {
+            // Explicit 14B or 7B or 1.5B check before defaulting to 32B
+            if req_clean.contains("14b") {
+                if let Some(m14) = available.iter().find(|m| m.to_lowercase().contains("14b")) {
+                    return m14.clone();
+                }
+            }
+            if req_clean.contains("7b") {
+                if let Some(m7) = available.iter().find(|m| m.to_lowercase().contains("7b")) {
+                    return m7.clone();
+                }
+            }
+            if req_clean.contains("1.5b") {
+                if let Some(m15) = available.iter().find(|m| m.to_lowercase().contains("1.5b")) {
+                    return m15.clone();
+                }
+            }
+            // Prefer 32B / 33B / 27B / 30B Coder first (never accidentally pick 1.5b alphabetically!)
+            if let Some(m32) = available.iter().find(|m| {
+                let ml = m.to_lowercase();
+                (ml.contains("32b") || ml.contains("33b") || ml.contains("27b") || ml.contains("30b"))
+                    && (ml.contains("coder") || ml.contains("qwen") || ml.contains("deepseek"))
+            }) {
+                return m32.clone();
+            }
+            if let Some(m32_any) = available.iter().find(|m| {
+                let ml = m.to_lowercase();
+                ml.contains("32b") || ml.contains("33b") || ml.contains("27b") || ml.contains("30b")
+            }) {
+                return m32_any.clone();
+            }
+            if let Some(m14) = available.iter().find(|m| {
+                let ml = m.to_lowercase();
+                ml.contains("coder") && ml.contains("14b")
+            }) {
+                return m14.clone();
+            }
+            if let Some(m7) = available.iter().find(|m| {
+                let ml = m.to_lowercase();
+                ml.contains("coder") && !ml.contains("1.5b")
+            }) {
+                return m7.clone();
+            }
+        }
         if req_clean.contains("70b") || req_clean.contains("72b") || req_clean.contains("scout") {
             if let Some(m70) = available.iter().find(|m| m.contains("70b") || m.contains("72b")) {
                 return m70.clone();
             }
         }
-        if req_clean.contains("coder") || req_clean.contains("code") {
-            if let Some(coder) = available.iter().find(|m| m.contains("coder")) {
-                return coder.clone();
+        if req_clean.contains("14b") {
+            if let Some(m14) = available.iter().find(|m| m.to_lowercase().contains("14b")) {
+                return m14.clone();
             }
         }
         if req_clean.contains("7b") || req_clean.contains("8b") {
@@ -334,7 +431,10 @@ impl BackendProxy {
             }
         }
         if req_clean.contains("qwen") {
-            if let Some(qwen) = available.iter().find(|m| m.contains("qwen")) {
+            if let Some(qwen) = available.iter().find(|m| {
+                let ml = m.to_lowercase();
+                ml.contains("qwen") && !ml.contains("1.5b")
+            }) {
                 return qwen.clone();
             }
         }
@@ -349,7 +449,10 @@ impl BackendProxy {
             return resident.clone();
         }
 
-        // 4. First available installed model
+        // 4. First available non-draft model
+        if let Some(first_non_draft) = available.iter().find(|m| !m.to_lowercase().contains("1.5b") && !m.to_lowercase().contains("1b")) {
+            return first_non_draft.clone();
+        }
         if let Some(first) = available.first() {
             return first.clone();
         }
@@ -462,13 +565,23 @@ impl BackendProxy {
                     .unwrap_or("")
                     .to_string();
 
+                let predicted_per_sec = json_resp["timings"]["predicted_per_second"]
+                    .as_f64()
+                    .unwrap_or(0.0);
+                let prompt_ms = json_resp["timings"]["prompt_ms"]
+                    .as_f64()
+                    .unwrap_or(0.0);
+                let predicted_ms = json_resp["timings"]["predicted_ms"]
+                    .as_f64()
+                    .unwrap_or(0.0);
+
                 let metrics = BackendMetrics {
                     eval_tokens: json_resp["usage"]["completion_tokens"].as_u64().unwrap_or(0),
-                    eval_duration_ns: 0,
+                    eval_duration_ns: (predicted_ms * 1_000_000.0) as u64,
                     prompt_eval_tokens: json_resp["usage"]["prompt_tokens"].as_u64().unwrap_or(0),
-                    prompt_eval_duration_ns: 0,
-                    tok_per_sec: 0.0,
-                    ttft_ms: 0.0,
+                    prompt_eval_duration_ns: (prompt_ms * 1_000_000.0) as u64,
+                    tok_per_sec: predicted_per_sec,
+                    ttft_ms: prompt_ms,
                 };
 
                 Ok((content, metrics))

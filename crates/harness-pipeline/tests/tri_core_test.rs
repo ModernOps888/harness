@@ -148,3 +148,29 @@ fn test_test_time_reasoning_best_of_n_selection() {
     println!("Reasoning Verdict Champion: Candidate {} (Score: {:.3}, Entropy: {:.3})", 
         verdict.winning_candidate_id, verdict.champion_score, verdict.champion_mean_entropy);
 }
+
+#[test]
+fn test_code_quality_rust_lifetimes_and_comments_delimiter_repair() {
+    // Truncated Rust function with lifetimes ('a, 'static) and comments containing unmatched brackets
+    let truncated_lifetime_rust = r#"
+pub fn parse<'a>(input: &'a str, fallback: &'static str) -> Result<&'a str, Error> {
+    // Comment with unmatched bracket { and (
+    /* Block comment with [ and 'unclosed quote */
+    let slice = &input[0..input.len().min(4
+"#;
+
+    let res = CodeQualityEngine::verify_rust(truncated_lifetime_rust);
+    assert!(!res.is_valid);
+    // Expected unclosed delimiters: `}` from fn block, `[` from slice index, `(` from .min(4
+    assert_eq!(res.unclosed_delimiters, vec!['}', ']', ')']);
+
+    let repaired = res.repaired_code.expect("Should produce deterministically repaired Rust code");
+    assert!(repaired.ends_with(")]}"));
+    assert!(!repaired.ends_with('\''), "Rust lifetime 'a must not trigger false single-quote closure");
+
+    // Re-verifying the repaired code should now pass 100% cleanly
+    let recheck = CodeQualityEngine::verify_rust(&repaired);
+    assert!(recheck.is_valid, "Repaired Rust lifetime code failed validation: {:?}", recheck.errors);
+    assert_eq!(recheck.syntax_score, 1.0);
+}
+

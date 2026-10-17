@@ -77,3 +77,30 @@ fn test_adaptive_vs_static_wasted_token_reduction() {
     assert!(report.wasted_tokens_reduction_pct >= 0.0);
     assert!(report.avg_adaptive_depth >= 1.0 && report.avg_adaptive_depth <= 8.0);
 }
+
+#[test]
+fn test_qwen25_coder_32b_vocab_alignment_and_llama_args() {
+    use harness_pipeline::{QWEN25_CODER_DRAFT_VOCAB_SIZE, QWEN25_CODER_TARGET_VOCAB_SIZE};
+
+    let cfg = AdaptiveSpeculativeConfig::qwen2_5_coder_32b_profile();
+    let decoder = AdaptiveSpeculativeDecoder::new(cfg).with_verification_gamma(0.05);
+
+    let args = decoder.to_llama_server_args();
+    assert!(args.contains(&"--draft-max".to_string()));
+    assert!(args.contains(&"--draft-min".to_string()));
+    assert!(args.contains(&"--draft-p-min".to_string()));
+
+    // Verify empirical batch verification latency model: T_verify(K+1) = T_step(1) * (1 + gamma * K)
+    let t_verify = decoder.verification_latency_ms(600.0, 4);
+    assert!((t_verify - 720.0).abs() < 1e-3);
+
+    // Verify vocabulary slice alignment between 1.5B drafter (151936) and 32B verifier (152064)
+    let draft_logits = vec![0.1f32; QWEN25_CODER_DRAFT_VOCAB_SIZE];
+    let target_logits = vec![0.2f32; QWEN25_CODER_TARGET_VOCAB_SIZE];
+    let (d_aligned, t_aligned, common) =
+        AdaptiveSpeculativeDecoder::align_vocab_logits(&draft_logits, &target_logits);
+    assert_eq!(common, 151_936);
+    assert_eq!(d_aligned.len(), 151_936);
+    assert_eq!(t_aligned.len(), 151_936);
+}
+

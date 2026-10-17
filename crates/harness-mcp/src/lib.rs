@@ -178,7 +178,7 @@ impl McpServer {
                                         "type": "object",
                                         "properties": {
                                             "prompt": { "type": "string", "description": "The coding or query prompt to evaluate." },
-                                            "model": { "type": "string", "description": "Target model: Qwen2.5-Coder-7B, Llama-3.3-70B, or Llama-4-Scout-109B-MoE." },
+                                            "model": { "type": "string", "description": "Target model: Qwen2.5-Coder-32B (default), Qwen2.5-Coder-14B, Qwen3-30B-A3B-MoE, or Qwen2.5-Coder-7B." },
                                             "constrained_mode": { "type": "string", "description": "none | json_schema | tool_call | ebnf" },
                                             "spiking_threshold": { "type": "number", "description": "Bio-SNN threshold (0.10 to 0.50) for sparse attention." }
                                         },
@@ -230,7 +230,7 @@ impl McpServer {
                                 },
                                 {
                                     "name": "harness_paged_attention_inspect",
-                                    "description": "Inspect PagedAttention virtual memory block allocation, fragmentation ratio, and physical KV cache consumption.",
+                                    "description": "Inspect PagedAttention virtual memory block allocation, fragmentation ratio, and physical KV cache consumption (64-layer Qwen2.5-Coder-32B GQA 40:8 geometry).",
                                     "inputSchema": {
                                         "type": "object",
                                         "properties": {
@@ -280,8 +280,8 @@ impl McpServer {
                                     "inputSchema": {
                                         "type": "object",
                                         "properties": {
-                                            "parameter_count_billions": { "type": "number", "description": "Model parameter count in billions (e.g. 7, 8, 14, 27, 70, 671)." },
-                                            "quantization_bits": { "type": "number", "description": "Quantization bits per parameter: 16 (FP16), 8 (FP8), 4.5 (Q4_K_M), 2 (Ternary)." },
+                                            "parameter_count_billions": { "type": "number", "description": "Model parameter count in billions (e.g. 7, 14, 27, 30, 32.76, 70)." },
+                                            "quantization_bits": { "type": "number", "description": "Quantization bits per parameter: 16 (FP16), 8 (FP8), 4.85 (Q4_K_M), 2 (Ternary)." },
                                             "context_length": { "type": "integer", "description": "Target context window size in tokens (defaults to 8192)." }
                                         },
                                         "required": ["parameter_count_billions"]
@@ -377,7 +377,7 @@ impl McpServer {
         match name {
             "harness_infer" => {
                 let prompt = args.get("prompt").and_then(|p| p.as_str()).unwrap_or("");
-                let model = args.get("model").and_then(|m| m.as_str()).unwrap_or("qwen2.5-coder:7b");
+                let model = args.get("model").and_then(|m| m.as_str()).unwrap_or("qwen2.5-coder:32b");
 
                 if prompt.is_empty() {
                     return Ok("Error: Prompt cannot be empty.".to_string());
@@ -385,28 +385,32 @@ impl McpServer {
                 let spiking_th = args.get("spiking_threshold").and_then(|s| s.as_f64()).unwrap_or(0.35);
                 let _active_decay = self.spiking.lock().unwrap().decay_beta;
 
-                // 1. Try forwarding to local HARNESS API server on port 8080
                 let client = match reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(30))
+                    .timeout(std::time::Duration::from_secs(60))
                     .build()
                 {
                     Ok(c) => c,
                     Err(e) => return Ok(format!("HTTP client error: {}", e)),
                 };
 
-                let harness_url = "http://127.0.0.1:8080/v1/chat/completions";
-                let payload = json!({
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7,
-                    "spiking_threshold": spiking_th
-                });
+                // 1. Try local HARNESS API server on port 8080 or dedicated 32B Coder llama-server on port 8089
+                for url in [
+                    "http://127.0.0.1:8080/v1/chat/completions",
+                    "http://127.0.0.1:8089/v1/chat/completions",
+                ] {
+                    let payload = json!({
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.7,
+                        "spiking_threshold": spiking_th
+                    });
 
-                if let Ok(res) = client.post(harness_url).json(&payload).send().await {
-                    if res.status().is_success() {
-                        if let Ok(json_res) = res.json::<serde_json::Value>().await {
-                            if let Some(content) = json_res.pointer("/choices/0/message/content").and_then(|c| c.as_str()) {
-                                return Ok(content.to_string());
+                    if let Ok(res) = client.post(url).json(&payload).send().await {
+                        if res.status().is_success() {
+                            if let Ok(json_res) = res.json::<serde_json::Value>().await {
+                                if let Some(content) = json_res.pointer("/choices/0/message/content").and_then(|c| c.as_str()) {
+                                    return Ok(content.to_string());
+                                }
                             }
                         }
                     }
@@ -431,7 +435,7 @@ impl McpServer {
                 }
 
                 Ok(format!(
-                    "HARNESS MCP Inference Notice: Neither HARNESS server (http://localhost:8080) nor Ollama (http://localhost:11434) is currently responding.\nQuery: \"{}\"\nTarget Model: {}\nTo enable live inference, run `cargo run -p harness-cli -- serve --port 8080` or `ollama serve`.",
+                    "HARNESS MCP Inference Notice: Neither HARNESS server (http://localhost:8080), 32B Coder Server (http://127.0.0.1:8089), nor Ollama (http://localhost:11434) is currently responding.\nQuery: \"{}\"\nTarget Model: {}\nTo enable live inference, run `./launch_qwen32b_coder.ps1` or `cargo run -p harness-cli -- serve --port 8080`.",
                     prompt, model
                 ))
             }
@@ -622,21 +626,24 @@ impl McpServer {
                 let wasted_slots = total_slots - tokens;
                 let fragmentation = (wasted_slots as f64 / total_slots as f64) * 100.0;
 
-                // Memory: 32 layers, 8 KV heads, dim 128, 2 bytes (FP16) for K and V
-                let bytes_per_token = 2 * 32 * 8 * 128 * 2;
-                let bytes_per_block = block_size * bytes_per_token;
-                let total_kv_mb = (blocks_needed * bytes_per_block) as f64 / (1024.0 * 1024.0);
+                // Qwen2.5-Coder-32B Geometry: 64 layers, 8 KV heads (GQA 40:8), head_dim 128
+                let cfg = harness_core::ModelConfig::qwen2_5_coder_32b();
+                let bytes_per_token_fp16 = cfg.kv_cache_bytes_per_token(16, 16);
+                let bytes_per_token_q8_q4 = cfg.kv_cache_bytes_per_token(8, 4);
+                let total_kv_fp16_mb = (total_slots * bytes_per_token_fp16) as f64 / (1024.0 * 1024.0);
+                let total_kv_quant_mb = (total_slots * bytes_per_token_q8_q4) as f64 / (1024.0 * 1024.0);
 
                 let result = format!(
-                    "HARNESS PagedAttention Block Allocation Telemetry\n\
+                    "HARNESS PagedAttention Block Allocation Telemetry (Qwen2.5-Coder-32B: 64 Layers, GQA 40:8)\n\
                      • Active Context: {} tokens\n\
                      • Page Block Size: {} tokens/block (Physical Cache Granularity)\n\
                      • Virtual Blocks Allocated: {} blocks\n\
                      • Internal Fragmentation: {:.2}% ({} unused token slots across last page)\n\
-                     • Physical KV Memory Allocated: {:.2} MB\n\
+                     • Physical KV Memory (FP16 Baseline): {:.2} MB\n\
+                     • Physical KV Memory (Q8_0 K / Q4_0 V Tuned): {:.2} MB (62.5% VRAM saved)\n\
                      • Page Table Indexing: Direct O(1) Virtual-to-Physical Translation Active\n\
                      • Zero External Fragmentation: Dynamic non-contiguous block pooling enabled",
-                    tokens, block_size, blocks_needed, fragmentation, wasted_slots, total_kv_mb
+                    tokens, block_size, blocks_needed, fragmentation, wasted_slots, total_kv_fp16_mb, total_kv_quant_mb
                 );
                 Ok(result)
             }
@@ -709,8 +716,8 @@ impl McpServer {
                 }
             }
             "harness_profile_hardware_limits" => {
-                let params_b = args.get("parameter_count_billions").and_then(|p| p.as_f64()).unwrap_or(7.0);
-                let bits = args.get("quantization_bits").and_then(|b| b.as_f64()).unwrap_or(4.5);
+                let params_b = args.get("parameter_count_billions").and_then(|p| p.as_f64()).unwrap_or(32.76);
+                let bits = args.get("quantization_bits").and_then(|b| b.as_f64()).unwrap_or(4.85);
                 let context = args.get("context_length").and_then(|c| c.as_u64()).unwrap_or(8192);
 
                 let hw = harness_core::HardwareProfile::auto_detect();
@@ -718,12 +725,12 @@ impl McpServer {
                 // Active weight footprint in GB: (params * 1e9 * (bits / 8)) / 1e9
                 let weight_gb = params_b * (bits / 8.0);
 
-                // Standard GQA KV cache footprint (assuming 8 KV heads, dim 128 per head, 32 layers for 7B, 80 for 70B)
-                let layers = if params_b >= 60.0 { 80.0 } else if params_b >= 20.0 { 64.0 } else if params_b >= 12.0 { 40.0 } else { 32.0 };
+                // Standard GQA KV cache footprint (64 layers for 27B-35B Coder, 80 for 70B, 48 for 14B/30B-MoE)
+                let layers = if params_b >= 60.0 { 80.0 } else if params_b >= 20.0 { 64.0 } else if params_b >= 12.0 { 48.0 } else { 32.0 };
                 let kv_heads = 8.0;
                 let head_dim = 128.0;
-                // Bytes per token = 2 (K+V) * layers * kv_heads * head_dim * 2 (FP16 bytes)
-                let bytes_per_token = 2.0 * layers * kv_heads * head_dim * 2.0;
+                // Bytes per token in Q8_0/Q4_0 KV cache (~1.5 bytes per K+V element pair)
+                let bytes_per_token = layers * kv_heads * head_dim * 1.5;
                 let kv_cache_gb = (context as f64 * bytes_per_token) / (1024.0 * 1024.0 * 1024.0);
                 let total_vram_needed_gb = weight_gb + kv_cache_gb;
 
@@ -738,6 +745,8 @@ impl McpServer {
                     "Unified Memory Resident (Zero-Copy UMA)"
                 } else if hw.vram_gb >= total_vram_needed_gb as f32 {
                     "GPU VRAM Resident (Direct Tensor Core Compute)"
+                } else if hw.vram_gb >= 6.0 && (20.0..60.0).contains(&params_b) {
+                    "27B-35B Coder Hybrid Offload (-ngl 17..21) + 100% VRAM 1.5B Speculative Drafter (-ngld 99) + Q8_0/Q4_0 KV"
                 } else if hw.vram_gb >= 6.0 && params_b >= 60.0 {
                     "HARNESS LayerStream Ping-Pong DMA (Double-Buffered PCIe Streaming)"
                 } else {
@@ -746,9 +755,9 @@ impl McpServer {
 
                 let result = format!(
                     "HARNESS Physical Hardware Memory & Speed Profile\n\
-                     • Model Size: {:.1}B parameters @ {:.1}-bit precision\n\
+                     • Model Size: {:.2}B parameters @ {:.2}-bit precision\n\
                      • Active Weights Footprint: {:.2} GB\n\
-                     • KV Cache Footprint ({} tokens): {:.2} GB\n\
+                     • KV Cache Footprint ({} tokens, Q8_0/Q4_0): {:.2} GB\n\
                      • Total Required Memory: {:.2} GB\n\
                      • Detected Host Hardware: {} ({:.1} GB VRAM, {:.0} GB/s Bandwidth)\n\
                      • Recommended Strategy: {}\n\

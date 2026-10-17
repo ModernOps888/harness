@@ -22,5 +22,6 @@ pub use scheduler::RequestScheduler;
 pub use speculative::{
     AdaptiveComparisonReport, AdaptiveSpeculativeConfig, AdaptiveSpeculativeDecoder,
     AdaptiveVerificationResult, SpeculativeBenchmarkResult, SpeculativeDecoder, SpeculativeDraft,
+    QWEN25_CODER_DRAFT_VOCAB_SIZE, QWEN25_CODER_TARGET_VOCAB_SIZE,
 };
 pub use stigmergy::{PheromoneEdge, StigmergicTrajectoryManager};

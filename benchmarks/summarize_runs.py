@@ -62,7 +62,7 @@ def common_prefix(a, b):
 
 
 def main():
-    cfgs = sorted(c for c in os.listdir(RUNS) if os.path.isdir(os.path.join(RUNS, c)))
+    cfgs = sorted(c for c in os.listdir(RUNS) if os.path.isdir(os.path.join(RUNS, c)) and c != "qwen32b_coder")
     base_res = load(BASELINE)[0] if BASELINE in cfgs else {}
     lines = ["# Raw-captured results (computed from files in `benchmarks/runs/`)", "",
              "Every number below is derived by `summarize_runs.py` from the verbatim llama-server `timings` JSON.",
@@ -115,7 +115,80 @@ def main():
 
 
 KEY_LOG = re.compile(r"offloaded|model buffer|KV buffer|compute buffer|load time|n_threads|speculative|draft|"
-                     r"fit|n_gpu_layers|flash|n_ctx\b", re.I)
+                     r"fit|n_gpu_layers|flash|n_ctx\b|graph splits", re.I)
+
+QWEN32B_PROMPTS = ["humaneval_merge_intervals", "lru_cache_rust", "async_deadlock_audit"]
+QWEN32B_BASELINE = "c0_raw_baseline"
+
+
+def build_qwen32b_json():
+    qdir = os.path.join(RUNS, "qwen32b_coder")
+    if not os.path.isdir(qdir):
+        return None
+    qcfgs = sorted(c for c in os.listdir(qdir) if os.path.isdir(os.path.join(qdir, c)))
+    if not qcfgs:
+        return None
+
+    def load_q(cfg):
+        d = os.path.join(qdir, cfg)
+        res = {}
+        for p in QWEN32B_PROMPTS:
+            fp = os.path.join(d, f"response_{p}.json")
+            if os.path.exists(fp):
+                res[p] = json.loads(open(fp, "rb").read())
+        meta = json.load(open(os.path.join(d, "meta.json"))) if os.path.exists(os.path.join(d, "meta.json")) else {}
+        log = open(os.path.join(d, "server_stdout.txt"), encoding="utf-8", errors="replace").read() \
+            if os.path.exists(os.path.join(d, "server_stdout.txt")) else ""
+        return res, meta, log
+
+    q_base_res = load_q(QWEN32B_BASELINE)[0] if QWEN32B_BASELINE in qcfgs else {}
+    configs_out = []
+    for c in qcfgs:
+        res, meta, log = load_q(c)
+        if not res:
+            continue
+        gi = gpu_info(c, meta, log)
+        entry = {
+            "config": c,
+            "cmd": meta.get("cmd"),
+            "started": meta.get("started"),
+            "git_head": meta.get("git_head"),
+            "free_ram_gb_before_launch": meta.get("free_ram_gb_before_launch"),
+            "smi_after_load_raw": meta.get("smi_after_load", {}).get("raw"),
+            "log_excerpt": [ln for ln in log.splitlines() if KEY_LOG.search(ln)][:45],
+            "gpu_layers": gi,
+            "prompts": {},
+        }
+        tn = tm = dn = da = 0
+        for p in QWEN32B_PROMPTS:
+            if p not in res:
+                continue
+            t = res[p]["timings"]
+            tn += t["predicted_n"]
+            tm += t["predicted_ms"]
+            dn += t.get("draft_n", 0) or 0
+            da += t.get("draft_n_accepted", 0) or 0
+            same = None
+            if c != QWEN32B_BASELINE and p in q_base_res:
+                same = res[p]["content"] == q_base_res[p]["content"]
+            entry["prompts"][p] = {
+                "timings_verbatim": t,
+                "content": res[p]["content"],
+                "identical_to_baseline": same,
+            }
+        if tm:
+            entry["pooled_tok_s"] = 1000 * tn / tm
+            entry["tokens"] = tn
+            entry["gen_seconds"] = tm / 1000
+        entry["draft_n"], entry["draft_accepted"] = dn, da
+        configs_out.append(entry)
+
+    return {
+        "model": "qwen2.5-coder:32b (Q4_K_M, 32.76B params)",
+        "drafter": "qwen2.5-coder:1.5b (Q4_K_M, 100% GPU resident)",
+        "baseline_config": QWEN32B_BASELINE,
+        "configs": configs_out,
+    }
 
 
 def write_json(cfgs, base_res):
@@ -162,6 +235,9 @@ def write_json(cfgs, base_res):
             entry["cpu_resident_weights_gb"] = cpu_gb
             entry["implied_cpu_read_gb_s"] = cpu_gb * entry["pooled_tok_s"]
         out["configs"].append(entry)
+    qwen32b = build_qwen32b_json()
+    if qwen32b:
+        out["qwen32b_coder"] = qwen32b
     with open(os.path.join(RUNS, "results.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
     extra = ["", "## Computed cross-check: implied CPU-side weight read rate (plain autoregressive configs only)", "",
@@ -177,7 +253,6 @@ def write_json(cfgs, base_res):
         f.write("\n".join(extra) + "\n")
 
 
-
-
 if __name__ == "__main__":
     main()
+

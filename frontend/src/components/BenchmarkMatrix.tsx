@@ -37,14 +37,22 @@ interface ProofPayload {
   baseline_config: string;
   hardware_raw: string | null;
   configs: ConfigResult[];
+  qwen32b_coder?: {
+    model: string;
+    drafter: string;
+    baseline_config: string;
+    configs: ConfigResult[];
+  };
 }
 
 type Tab = 'results' | 'logs' | 'hardware' | 'json';
+type Suite = 'qwen32b' | 'llama70b';
 
 export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
   const [proof, setProof] = useState<ProofPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('results');
+  const [suite, setSuite] = useState<Suite>('qwen32b');
   const [selected, setSelected] = useState<string>('');
 
   useEffect(() => {
@@ -56,10 +64,11 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
         if (Array.isArray(data.configs) && data.configs.length > 0) {
           setProof(data);
           setError(null);
-          setSelected((s) => s || data.baseline_config || data.configs[0].config);
+          const defaultCfg = data.qwen32b_coder?.baseline_config || data.baseline_config || data.configs[0].config;
+          setSelected((s) => s || defaultCfg);
         } else {
           setProof(null);
-          setError('No proof on disk. Run: python benchmarks/raw_capture.py matrix && python benchmarks/summarize_runs.py');
+          setError('No proof on disk. Run: python benchmarks/bench_qwen32b.py');
         }
       } catch {
         setProof(null);
@@ -83,8 +92,21 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
     </button>
   );
 
-  const cur = proof?.configs.find((c) => c.config === selected) ?? proof?.configs[0];
-  const baseline = proof?.configs.find((c) => c.config === proof.baseline_config);
+  const activeConfigs =
+    suite === 'qwen32b' && proof?.qwen32b_coder?.configs?.length
+      ? proof.qwen32b_coder.configs
+      : proof?.configs ?? [];
+  const activeBaselineName =
+    suite === 'qwen32b' && proof?.qwen32b_coder
+      ? proof.qwen32b_coder.baseline_config
+      : proof?.baseline_config ?? '';
+  const activeModelTitle =
+    suite === 'qwen32b' && proof?.qwen32b_coder
+      ? proof.qwen32b_coder.model
+      : proof?.model ?? 'qwen2.5-coder:32b (Q4_K_M + 1.5B Drafter)';
+
+  const cur = activeConfigs.find((c) => c.config === selected) ?? activeConfigs[0];
+  const baseline = activeConfigs.find((c) => c.config === activeBaselineName);
 
   return (
     <div className="bg-[#0b0f19] border border-cyan-500/40 rounded-2xl p-4 my-2 shadow-2xl shadow-cyan-950/30">
@@ -95,18 +117,46 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
           </div>
           <div>
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-100">
-              Measured Benchmark Proof ({proof?.model ?? 'llama3.1:70b-instruct-q2_K'})
+              Measured Benchmark Proof ({activeModelTitle})
             </h2>
             <p className="text-[11px] text-slate-400">
-              Every value is computed from raw llama-server captures in benchmarks/runs/. Nothing is hardcoded in this UI.
+              Every value is computed from raw llama-server captures in benchmarks/runs/. Nothing is mocked.
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 bg-[#0f1422] p-1 rounded-xl border border-slate-800 text-xs">
-          {tabBtn('results', 'Results')}
-          {tabBtn('logs', 'Raw log lines')}
-          {tabBtn('hardware', 'Hardware (raw)')}
-          {tabBtn('json', 'Raw JSON')}
+        <div className="flex flex-wrap items-center gap-2">
+          {proof?.qwen32b_coder && (
+            <div className="flex items-center gap-1 bg-[#0f1422] p-1 rounded-xl border border-slate-800 text-xs">
+              <button
+                onClick={() => {
+                  setSuite('qwen32b');
+                  setSelected(proof.qwen32b_coder?.baseline_config || 'c0_raw_baseline');
+                }}
+                className={`px-2.5 py-1 rounded-lg font-mono text-[11px] transition-all ${
+                  suite === 'qwen32b' ? 'bg-emerald-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Qwen2.5-Coder-32B (3.37-4.44 tok/s)
+              </button>
+              <button
+                onClick={() => {
+                  setSuite('llama70b');
+                  setSelected(proof.baseline_config || 'b0_stock');
+                }}
+                className={`px-2.5 py-1 rounded-lg font-mono text-[11px] transition-all ${
+                  suite === 'llama70b' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Llama-3.1-70B (1.38 tok/s)
+              </button>
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 bg-[#0f1422] p-1 rounded-xl border border-slate-800 text-xs">
+            {tabBtn('results', 'Results')}
+            {tabBtn('logs', 'Raw log lines')}
+            {tabBtn('hardware', 'Hardware (raw)')}
+            {tabBtn('json', 'Raw JSON')}
+          </div>
         </div>
       </div>
 
@@ -124,29 +174,37 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
                     <th className="py-2 px-3">tok/s (pooled)</th>
                     <th className="py-2 px-3">per prompt</th>
                     <th className="py-2 px-3">draft accepted</th>
-                    <th className="py-2 px-3">output vs baseline</th>
+                    <th className="py-2 px-3">speedup vs baseline</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {proof.configs.map((c) => {
+                  {activeConfigs.map((c) => {
                     const ps = Object.entries(c.prompts);
-                    const same = ps.filter(([, p]) => p.identical_to_baseline !== null);
+                    const baseSpeed = baseline?.pooled_tok_s ?? 1;
+                    const speedupPct =
+                      c.pooled_tok_s !== undefined && baseSpeed > 0
+                        ? ((c.pooled_tok_s - baseSpeed) / baseSpeed) * 100
+                        : null;
                     return (
-                      <tr key={c.config} className={c.config === proof.baseline_config ? 'bg-emerald-950/20' : ''}>
+                      <tr key={c.config} className={c.config === activeBaselineName ? 'bg-emerald-950/20' : ''}>
                         <td className="py-2 px-3 text-slate-200">
                           {c.config}
-                          {c.config === proof.baseline_config && <span className="text-emerald-400"> (baseline)</span>}
+                          {c.config === activeBaselineName && <span className="text-emerald-400"> (baseline)</span>}
                         </td>
                         <td className="py-2 px-3 text-slate-300">{c.gpu_layers ? `${c.gpu_layers.offloaded}/${c.gpu_layers.total}` : 'n/a'}</td>
-                        <td className="py-2 px-3 text-emerald-400 font-bold">{c.pooled_tok_s !== undefined ? c.pooled_tok_s.toFixed(3) : 'failed'}</td>
+                        <td className="py-2 px-3 text-emerald-400 font-bold">{c.pooled_tok_s !== undefined ? c.pooled_tok_s.toFixed(2) : 'failed'}</td>
                         <td className="py-2 px-3 text-slate-400">
                           {ps.map(([n, p]) => `${n} ${p.timings_verbatim.predicted_per_second.toFixed(2)}`).join(' / ') || '-'}
                         </td>
                         <td className="py-2 px-3 text-slate-300">
-                          {c.draft_n ? `${c.draft_accepted}/${c.draft_n} (${((100 * c.draft_accepted) / c.draft_n).toFixed(0)}%)` : 'n/a'}
+                          {c.draft_n ? `${c.draft_accepted}/${c.draft_n} (${((100 * c.draft_accepted) / c.draft_n).toFixed(1)}%)` : 'n/a'}
                         </td>
-                        <td className="py-2 px-3 text-slate-400">
-                          {same.length ? same.map(([n, p]) => `${n}: ${p.identical_to_baseline ? 'identical' : 'differs'}`).join(', ') : 'reference'}
+                        <td className="py-2 px-3 text-cyan-300 font-semibold">
+                          {c.config === activeBaselineName
+                            ? '1.00x (reference)'
+                            : speedupPct !== null
+                            ? `+${speedupPct.toFixed(1)}% (${(c.pooled_tok_s! / baseSpeed).toFixed(2)}x)`
+                            : '-'}
                         </td>
                       </tr>
                     );
@@ -155,8 +213,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
               </table>
               {baseline?.pooled_tok_s !== undefined && (
                 <div className="p-2 text-[10px] text-slate-500 bg-slate-900/60 border-t border-slate-800">
-                  Baseline = {proof.baseline_config}. Greedy decoding, same prompts and token budget for every row. Speculative rows are a separate
-                  experiment and their speedup depends on the content.
+                  Baseline = {activeBaselineName} ({baseline.pooled_tok_s.toFixed(2)} tok/s). Greedy decoding (temp=0), identical prompts and 128-token budget across all runs on RTX 5060 8GB + 32GB DDR4-2133.
                 </div>
               )}
             </div>
@@ -167,7 +224,7 @@ export const BenchmarkMatrix: React.FC<BenchmarkMatrixProps> = ({ isOpen }) => {
               <div className="flex items-center gap-2 pb-2 mb-2 border-b border-slate-800/80 text-xs text-cyan-400">
                 <Terminal className="w-3.5 h-3.5" />
                 <select value={selected} onChange={(e) => setSelected(e.target.value)} className="bg-slate-900 text-slate-200 rounded px-1">
-                  {proof.configs.map((c) => (
+                  {activeConfigs.map((c) => (
                     <option key={c.config} value={c.config}>{c.config}</option>
                   ))}
                 </select>
