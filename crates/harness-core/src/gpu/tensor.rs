@@ -1013,6 +1013,227 @@ impl GpuTensor {
         ctx.queue.submit(Some(encoder.finish()));
         Ok(out)
     }
+
+    /// Native Dynamic Activation-Sparse In-Register INT4 GEMV (`M=1` decoding):
+    /// Skips reading 32-weight Q4 blocks from GDDR7 VRAM when the corresponding
+    /// 32-element activation block's $L_\infty$ norm is $\le$ `threshold`.
+    pub fn sparse_gemv_q4(
+        &self,
+        ctx: &GpuContext,
+        weight: &GpuQ4Tensor,
+        threshold: f32,
+    ) -> Result<Self> {
+        let k = self.numel;
+        if k != weight.k {
+            return Err(HarnessError::ShapeMismatch {
+                expected: vec![1, weight.k],
+                found: self.shape.clone(),
+            });
+        }
+
+        let n = weight.n;
+        let blocks_per_col = k.div_ceil(32);
+        let out_shape = if self.shape.len() == 2 {
+            vec![1, n]
+        } else {
+            vec![n]
+        };
+        let out = Self::empty(ctx, out_shape)?;
+
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct SparseQ4GemvUniform {
+            k: u32,
+            n: u32,
+            blocks_per_col: u32,
+            threshold: f32,
+        }
+
+        let dims = SparseQ4GemvUniform {
+            k: k as u32,
+            n: n as u32,
+            blocks_per_col: blocks_per_col as u32,
+            threshold,
+        };
+
+        let uniform_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Sparse GEMV Q4 Uniform"),
+            contents: bytemuck::bytes_of(&dims),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Sparse GEMV Q4 BindGroup"),
+            layout: &ctx.sparse_gemv_q4_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: weight.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: out.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Sparse GEMV Q4 Command Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Sparse GEMV Q4 Compute Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&ctx.sparse_gemv_q4_pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups(n as u32, 1, 1);
+        }
+
+        ctx.queue.submit(Some(encoder.finish()));
+        Ok(out)
+    }
+
+    /// Native GPU Top-K Softmax Router for Sparse Mixture-of-Experts (`Qwen3-Coder-30B-A3B` 128 experts, top-8 active).
+    /// Returns `(topk_indices, topk_weights)` flattened across `num_tokens * top_k`.
+    pub fn moe_route_topk(
+        &self,
+        ctx: &GpuContext,
+        num_experts: usize,
+        top_k: usize,
+        norm_topk: bool,
+    ) -> Result<(Vec<u32>, Vec<f32>)> {
+        if num_experts == 0 || num_experts > 256 || top_k == 0 || top_k > num_experts {
+            return Err(HarnessError::InvalidShape(format!(
+                "Invalid MoE router config: num_experts={}, top_k={}",
+                num_experts, top_k
+            )));
+        }
+        if !self.numel.is_multiple_of(num_experts) {
+            return Err(HarnessError::InvalidShape(format!(
+                "Router logits numel {} not divisible by num_experts {}",
+                self.numel, num_experts
+            )));
+        }
+        let num_tokens = self.numel / num_experts;
+        let out_elems = num_tokens * top_k;
+        let out_bytes = (out_elems * 4) as u64;
+
+        let idx_buf = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MoE TopK Indices Buffer"),
+            size: out_bytes,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let w_buf = Arc::new(ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MoE TopK Weights Buffer"),
+            size: out_bytes,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        }));
+
+        #[repr(C)]
+        #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+        struct MoeRouterUniform {
+            num_tokens: u32,
+            num_experts: u32,
+            top_k: u32,
+            norm_topk: u32,
+        }
+
+        let params = MoeRouterUniform {
+            num_tokens: num_tokens as u32,
+            num_experts: num_experts as u32,
+            top_k: top_k as u32,
+            norm_topk: if norm_topk { 1 } else { 0 },
+        };
+
+        let uniform_buf = ctx.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("MoE Router Uniform"),
+            contents: bytemuck::bytes_of(&params),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+
+        let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("MoE Router BindGroup"),
+            layout: &ctx.moe_router_topk_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: idx_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: w_buf.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: uniform_buf.as_entire_binding(),
+                },
+            ],
+        });
+
+        let idx_staging = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("MoE Indices Staging"),
+            size: out_bytes,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = ctx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("MoE Router Command Encoder"),
+        });
+
+        {
+            let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("MoE Router Compute Pass"),
+                timestamp_writes: None,
+            });
+            cpass.set_pipeline(&ctx.moe_router_topk_pipeline);
+            cpass.set_bind_group(0, &bind_group, &[]);
+            cpass.dispatch_workgroups(num_tokens as u32, 1, 1);
+        }
+
+        encoder.copy_buffer_to_buffer(&idx_buf, 0, &idx_staging, 0, out_bytes);
+        ctx.queue.submit(Some(encoder.finish()));
+
+        let slice = idx_staging.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |res| {
+            let _ = tx.send(res);
+        });
+        ctx.device.poll(wgpu::Maintain::Wait);
+        rx.recv()
+            .map_err(|e| HarnessError::Device(format!("MoE indices map recv failed: {}", e)))?
+            .map_err(|e| HarnessError::Device(format!("MoE indices map failed: {}", e)))?;
+
+        let data = slice.get_mapped_range();
+        let indices: Vec<u32> = bytemuck::cast_slice(&data).to_vec();
+        drop(data);
+        idx_staging.unmap();
+
+        let weights_tensor = GpuTensor {
+            buffer: w_buf,
+            shape: vec![num_tokens, top_k],
+            numel: out_elems,
+        };
+        let weights = weights_tensor.to_vec(ctx)?;
+        Ok((indices, weights))
+    }
 }
+
 
 

@@ -196,3 +196,97 @@ fn test_q4_imatrix_and_matvec_fused() {
     assert_eq!(prof.target_dtype, DType::FP8E4M3);
 }
 
+#[test]
+fn test_q4k_superblock_quantize_dequantize_and_fused_dot() {
+    use harness_quant::{
+        dequantize_q4_k_bytes, dequantize_q8_0_bytes, f16_to_f32, f32_to_f16, BlockQ4K,
+    };
+
+    const QK_K: usize = BlockQ4K::BLOCK_SIZE;
+
+    // Verify IEEE-754 FP16 <-> FP32 roundtrip
+    for &val in &[0.0f32, 1.0, -1.0, 0.03125, 12.5, -0.004] {
+        let bits = f32_to_f16(val);
+        let rec = f16_to_f32(bits);
+        assert!((val - rec).abs() < 1e-3, "FP16 roundtrip failed for {}: got {}", val, rec);
+    }
+
+    // Generate 256 weights across 8 sub-blocks with varying scales and negative offsets
+    let mut weights = [0.0f32; QK_K];
+    let mut importance = [1.0f32; QK_K];
+    for i in 0..QK_K {
+        let sub = (i / 32) as f32;
+        weights[i] = ((i as f32 * 0.17).sin() * (0.5 + 0.3 * sub)) - (0.2 * sub);
+        if i % 16 == 0 {
+            importance[i] = 25.0; // High activation salience channel
+        }
+    }
+
+    let block_std = BlockQ4K::quantize_from_f32(&weights, None);
+    let block_imatrix = BlockQ4K::quantize_from_f32(&weights, Some(&importance));
+
+    let mut deq_std = [0.0f32; QK_K];
+    let mut deq_im = [0.0f32; QK_K];
+    block_std.dequantize(&mut deq_std);
+    block_imatrix.dequantize(&mut deq_im);
+
+    // Check MAE of standard Q4_K super-block
+    let mae_std: f32 = weights
+        .iter()
+        .zip(deq_std.iter())
+        .map(|(&a, &b)| (a - b).abs())
+        .sum::<f32>()
+        / (QK_K as f32);
+    assert!(mae_std < 0.12, "Q4_K super-block MAE too high: {}", mae_std);
+
+    // Verify imatrix weighted quantization reduces error on high-importance channels
+    let salient_err_std: f32 = (0..QK_K)
+        .step_by(16)
+        .map(|i| (weights[i] - deq_std[i]).powi(2))
+        .sum();
+    let salient_err_im: f32 = (0..QK_K)
+        .step_by(16)
+        .map(|i| (weights[i] - deq_im[i]).powi(2))
+        .sum();
+    assert!(
+        salient_err_im <= salient_err_std + 1e-4,
+        "imatrix error {} should be <= std error {}",
+        salient_err_im,
+        salient_err_std
+    );
+
+    // Verify fused in-register dot_f32 matches dequantized dot product exactly
+    let mut act = [0.0f32; QK_K];
+    for (i, a) in act.iter_mut().enumerate() {
+        *a = (i as f32 * 0.09).cos();
+    }
+    let fused_dot = block_imatrix.dot_f32(&act);
+    let ref_dot: f32 = deq_im.iter().zip(act.iter()).map(|(w, x)| w * x).sum();
+    assert!(
+        (fused_dot - ref_dot).abs() < 1e-3,
+        "Fused Q4_K dot {} != ref dot {}",
+        fused_dot,
+        ref_dot
+    );
+
+    // Verify raw byte slice unpacking for GGUF Q4_K (type 12) and Q8_0 (type 7)
+    let raw_q4k = block_imatrix.to_bytes();
+    let unpacked_q4k = dequantize_q4_k_bytes(&raw_q4k, QK_K);
+    assert_eq!(unpacked_q4k.len(), QK_K);
+    for i in 0..QK_K {
+        assert!((unpacked_q4k[i] - deq_im[i]).abs() < 1e-6);
+    }
+
+    let mut raw_q8_0 = vec![0u8; 34];
+    let d_f16 = f32_to_f16(0.25);
+    raw_q8_0[0..2].copy_from_slice(&d_f16.to_le_bytes());
+    for i in 0..32 {
+        raw_q8_0[2 + i] = (i as i8 - 16) as u8;
+    }
+    let unpacked_q8 = dequantize_q8_0_bytes(&raw_q8_0, 32);
+    assert_eq!(unpacked_q8[0], -4.0);
+    assert_eq!(unpacked_q8[16], 0.0);
+    assert_eq!(unpacked_q8[20], 1.0);
+}
+
+

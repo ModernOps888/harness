@@ -1489,10 +1489,10 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             };
             println!("  • Max VRAM Buffer Size:   {}\n", vram_cap.yellow());
 
-            // [1/6] VRAM Bandwidth & DMA Allocation
+            // [1/9] VRAM Bandwidth & DMA Allocation
             let n_elems = matrix_dim * matrix_dim;
             let size_mb = (n_elems * 4) as f64 / (1024.0 * 1024.0);
-            print!("  [1/6] Testing Host-to-Device VRAM Transfer ({:.1} MB)... ", size_mb);
+            print!("  [1/9] Testing Host-to-Device VRAM Transfer ({:.1} MB)... ", size_mb);
             io::stdout().flush().ok();
             let host_data: Vec<f32> = (0..n_elems).map(|i| (i as f32 * 0.001).sin()).collect();
             let t_up_start = Instant::now();
@@ -1503,17 +1503,19 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("        • Upload Latency:     {:.2?}", t_up);
             println!("        • Effective PCIe DMA: {:.2} GB/s", up_bw);
 
-            // [2/6] Native GPU GEMM Throughput (2D Tiled)
-            print!("  [2/6] Benchmarking 2D Tiled GEMM ({}x{}x{} FP32, {} runs)... ", matrix_dim, matrix_dim, matrix_dim, iterations);
+            // [2/9] Native GPU GEMM Throughput (2D Tiled)
+            print!("  [2/9] Benchmarking 2D Tiled GEMM ({}x{}x{} FP32, {} runs)... ", matrix_dim, matrix_dim, matrix_dim, iterations);
             io::stdout().flush().ok();
             let d_b = harness_core::GpuTensor::from_f32_slice(&ctx, &host_data, vec![matrix_dim, matrix_dim])?;
             // Warmup
             let _ = d_a.matmul(&ctx, &d_b)?;
+            ctx.synchronize();
             let gemm_start = Instant::now();
             let mut last_c = d_a.clone();
             for _ in 0..iterations {
                 last_c = d_a.matmul(&ctx, &d_b)?;
             }
+            ctx.synchronize();
             let gemm_elapsed = gemm_start.elapsed();
             let avg_gemm_ms = gemm_elapsed.as_secs_f64() / (iterations as f64) * 1000.0;
             // 2 * M * N * K FLOPs
@@ -1523,10 +1525,10 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("        • Average Kernel Time: {:.2} ms", avg_gemm_ms);
             println!("        • Compute Throughput:  {} GFLOP/s ({:.2} TFLOP/s)", format!("{:.2}", gflops).bold().green(), gflops / 1000.0);
 
-            // [3/6] Dedicated Single-Token GEMV (M=1 FP32, Qwen2.5-Coder-32B 5120x5120 Q/O Projection)
+            // [3/9] Dedicated Single-Token GEMV (M=1 FP32, Qwen2.5-Coder-32B 5120x5120 Q/O Projection)
             let layer_k = 5120usize;
             let layer_n = 5120usize;
-            print!("  [3/6] Benchmarking 32B Coder Token GEMV (M=1, K={}, N={})... ", layer_k, layer_n);
+            print!("  [3/9] Benchmarking 32B Coder Token GEMV (M=1, K={}, N={})... ", layer_k, layer_n);
             io::stdout().flush().ok();
             let tok_x_data: Vec<f32> = (0..layer_k).map(|i| (i as f32 * 0.01).sin()).collect();
             let weight_fp_data: Vec<f32> = (0..(layer_k * layer_n)).map(|i| (i as f32 * 0.001).cos()).collect();
@@ -1534,11 +1536,13 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             let d_weight_fp = harness_core::GpuTensor::from_f32_slice(&ctx, &weight_fp_data, vec![layer_k, layer_n])?;
             // Warmup
             let _ = d_tok_x.gemv(&ctx, &d_weight_fp)?;
+            ctx.synchronize();
             let gemv_start = Instant::now();
             let gemv_runs = 50usize;
             for _ in 0..gemv_runs {
                 let _ = d_tok_x.gemv(&ctx, &d_weight_fp)?;
             }
+            ctx.synchronize();
             let gemv_elapsed = gemv_start.elapsed();
             let avg_gemv_us = gemv_elapsed.as_secs_f64() / (gemv_runs as f64) * 1_000_000.0;
             let gemv_flops = 2.0 * (layer_k as f64) * (layer_n as f64);
@@ -1547,16 +1551,18 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("        • Single-Token Latency: {:.2} μs ({:.3} ms)", avg_gemv_us, avg_gemv_us / 1000.0);
             println!("        • Projection Rate:      {} GFLOP/s", format!("{:.2}", gemv_gflops).bold().green());
 
-            // [4/6] Native 4-Bit In-Register Quantized GEMV Q4 (M=1, 5120x5120)
-            print!("  [4/6] Benchmarking In-Register Quantized GEMV Q4 (M=1, K={}, N={})... ", layer_k, layer_n);
+            // [4/9] Native 4-Bit In-Register Quantized GEMV Q4 (M=1, 5120x5120)
+            print!("  [4/9] Benchmarking In-Register Quantized GEMV Q4 (M=1, K={}, N={})... ", layer_k, layer_n);
             io::stdout().flush().ok();
             let d_weight_q4 = harness_core::GpuQ4Tensor::from_f32_matrix(&ctx, &weight_fp_data, layer_k, layer_n)?;
             // Warmup
             let _ = d_tok_x.gemv_q4(&ctx, &d_weight_q4)?;
+            ctx.synchronize();
             let gemv_q4_start = Instant::now();
             for _ in 0..gemv_runs {
                 let _ = d_tok_x.gemv_q4(&ctx, &d_weight_q4)?;
             }
+            ctx.synchronize();
             let gemv_q4_elapsed = gemv_q4_start.elapsed();
             let avg_gemv_q4_us = gemv_q4_elapsed.as_secs_f64() / (gemv_runs as f64) * 1_000_000.0;
             let q4_weight_bytes = d_weight_q4.memory_size_bytes() as f64;
@@ -1568,7 +1574,7 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("        • Physical VRAM Read BW: {:.2} GB/s", q4_vram_bw);
             println!("        • Effective Bandwidth:   {} GB/s ({}x vs FP32 bus)", format!("{:.1}", effective_bw).bold().green(), format!("{:.1}", effective_bw / q4_vram_bw).cyan());
 
-            // [5/6] Native GPU RMSNorm (5120 hidden dim)
+            // [5/9] Native GPU RMSNorm (5120 hidden dim)
             let norm_tokens = 1024usize;
             let hidden_dim = 5120usize;
             let norm_elems = norm_tokens * hidden_dim;
@@ -1576,13 +1582,16 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             let norm_weight: Vec<f32> = vec![1.0; hidden_dim];
             let d_x = harness_core::GpuTensor::from_f32_slice(&ctx, &norm_data, vec![norm_tokens, hidden_dim])?;
             let d_w = harness_core::GpuTensor::from_f32_slice(&ctx, &norm_weight, vec![1, hidden_dim])?;
-            print!("  [5/6] Benchmarking Native GPU RMSNorm ({} tokens x {} hidden)... ", norm_tokens, hidden_dim);
+            print!("  [5/9] Benchmarking Native GPU RMSNorm ({} tokens x {} hidden)... ", norm_tokens, hidden_dim);
             io::stdout().flush().ok();
+            let _ = d_x.rms_norm(&ctx, &d_w, 1e-6)?;
+            ctx.synchronize();
             let norm_start = Instant::now();
             let norm_runs = 20usize;
             for _ in 0..norm_runs {
                 let _ = d_x.rms_norm(&ctx, &d_w, 1e-6)?;
             }
+            ctx.synchronize();
             let norm_elapsed = norm_start.elapsed();
             let avg_norm_us = norm_elapsed.as_secs_f64() / (norm_runs as f64) * 1_000_000.0;
             let norm_tok_per_sec = (norm_tokens as f64) / (avg_norm_us / 1_000_000.0);
@@ -1590,24 +1599,115 @@ $$\text{{Throughput (tok/s)}} \le \frac{{\text{{Memory Bandwidth (GB/s)}}}}{{\te
             println!("        • Average Kernel Time: {:.2} μs", avg_norm_us);
             println!("        • Normalization Rate:  {} tokens/sec", format!("{:.0}", norm_tok_per_sec).bold().green());
 
-            // [6/6] Native GPU SwiGLU Activation (Qwen2.5-Coder-32B 27648 FFN width)
+            // [6/9] Native GPU SwiGLU Activation (Qwen2.5-Coder-32B 27648 FFN width)
             let ffn_dim = 27648usize; // Qwen2.5-Coder-32B / Qwen3-27B FFN intermediate_size
             let swiglu_elems = 128 * ffn_dim; // 128 tokens
             let swiglu_data: Vec<f32> = (0..swiglu_elems).map(|i| (i as f32 * 0.05).sin()).collect();
             let d_act = harness_core::GpuTensor::from_f32_slice(&ctx, &swiglu_data, vec![128, ffn_dim])?;
             let d_gate = harness_core::GpuTensor::from_f32_slice(&ctx, &swiglu_data, vec![128, ffn_dim])?;
-            print!("  [6/6] Benchmarking 32B Coder GPU SwiGLU Activation (128 tok x {} FFN)... ", ffn_dim);
+            print!("  [6/9] Benchmarking 32B Coder GPU SwiGLU Activation (128 tok x {} FFN)... ", ffn_dim);
             io::stdout().flush().ok();
+            let _ = d_act.swiglu(&ctx, &d_gate)?;
+            ctx.synchronize();
             let swiglu_start = Instant::now();
             let swiglu_runs = 20usize;
             for _ in 0..swiglu_runs {
                 let _ = d_act.swiglu(&ctx, &d_gate)?;
             }
+            ctx.synchronize();
             let swiglu_elapsed = swiglu_start.elapsed();
             let avg_swiglu_us = swiglu_elapsed.as_secs_f64() / (swiglu_runs as f64) * 1_000_000.0;
             println!("{}", "DONE".green());
             println!("        • Average Kernel Time: {:.2} μs", avg_swiglu_us);
-            println!("        • Activation Speed:    {} M-elements/sec\n", format!("{:.2}", (swiglu_elems as f64 / 1e6) / (avg_swiglu_us / 1e6)).bold().green());
+            println!("        • Activation Speed:    {} M-elements/sec", format!("{:.2}", (swiglu_elems as f64 / 1e6) / (avg_swiglu_us / 1e6)).bold().green());
+
+            // [7/9] Dynamic Activation-Sparse Q4 GEMV (sparse_gemv_q4, 75% zero-block skipping)
+            print!("  [7/9] Benchmarking Activation-Sparse GEMV Q4 (M=1, K={}, N={}, 75% sparse)... ", layer_k, layer_n);
+            io::stdout().flush().ok();
+            let mut sparse_tok_x_data = vec![0.0f32; layer_k];
+            for (i, val) in sparse_tok_x_data.iter_mut().enumerate() {
+                if (i / 32) % 4 == 0 {
+                    *val = (i as f32 * 0.01).sin();
+                }
+            }
+            let d_sparse_x = harness_core::GpuTensor::from_f32_slice(&ctx, &sparse_tok_x_data, vec![1, layer_k])?;
+            let _ = d_sparse_x.sparse_gemv_q4(&ctx, &d_weight_q4, 1e-4)?;
+            ctx.synchronize();
+            let sparse_start = Instant::now();
+            for _ in 0..gemv_runs {
+                let _ = d_sparse_x.sparse_gemv_q4(&ctx, &d_weight_q4, 1e-4)?;
+            }
+            ctx.synchronize();
+            let avg_sparse_us = sparse_start.elapsed().as_secs_f64() / (gemv_runs as f64) * 1_000_000.0;
+            println!("{}", "DONE".green());
+            println!("        • Sparse Q4 Latency:   {:.2} μs (vs {:.2} μs dense Q4)", avg_sparse_us, avg_gemv_q4_us);
+
+            // [8/9] Native GPU Top-8 MoE Router (Qwen3-Coder-30B-A3B: 128 Experts, Top-8 Active)
+            print!("  [8/9] Benchmarking GPU Top-8 MoE Router (8 speculative tokens x 128 experts)... ");
+            io::stdout().flush().ok();
+            let moe_tokens = 8usize;
+            let moe_experts = 128usize;
+            let moe_topk = 8usize;
+            let router_logits: Vec<f32> = (0..(moe_tokens * moe_experts))
+                .map(|i| ((i as f32) * 0.13).sin() * 2.5)
+                .collect();
+            let d_router = harness_core::GpuTensor::from_f32_slice(&ctx, &router_logits, vec![moe_tokens, moe_experts])?;
+            let (top_idx, top_w) = d_router.moe_route_topk(&ctx, moe_experts, moe_topk, true)?;
+            println!("{}", "DONE".green());
+            println!(
+                "        • Token[0] Top-3 Experts: #{} ({:.3}), #{} ({:.3}), #{} ({:.3})",
+                top_idx[0], top_w[0], top_idx[1], top_w[1], top_idx[2], top_w[2]
+            );
+
+            // [9/9] Real GGUF Weight Extraction & Physical GPU Execution
+            print!("  [9/9] Unpacking Real GGUF Tensor Weights & Executing on GPU... ");
+            io::stdout().flush().ok();
+            let home_dir = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_else(|_| ".".to_string());
+            let candidate_blobs = [
+                ("Qwen2.5-Coder-32B-Q4_K_M", format!("{}/.ollama/models/blobs/sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9", home_dir)),
+                ("Qwen3-Coder-30B-A3B-Q4_K_M", format!("{}/.ollama/models/blobs/sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a", home_dir)),
+                ("Qwen2.5-Coder-1.5B-Q4_K_M", format!("{}/.ollama/models/blobs/sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104", home_dir)),
+            ];
+            if let Some((model_label, blob_path)) = candidate_blobs
+                .iter()
+                .find(|(_, p)| std::path::Path::new(p).exists())
+            {
+                let (norm_info, norm_w) = harness_loader::GgufReader::extract_tensor_f32(
+                    blob_path,
+                    "blk.0.attn_norm.weight",
+                    5120,
+                )?;
+                let h_dim = norm_w.len();
+                let (q_info, q_w_slice) = harness_loader::GgufReader::extract_tensor_f32(
+                    blob_path,
+                    "blk.0.attn_q.weight",
+                    h_dim * 64,
+                )?;
+                let out_cols = q_w_slice.len() / h_dim;
+                let real_x: Vec<f32> = (0..h_dim).map(|i| ((i as f32) * 0.017).cos()).collect();
+                let d_real_x = harness_core::GpuTensor::from_f32_slice(&ctx, &real_x, vec![1, h_dim])?;
+                let d_real_norm = harness_core::GpuTensor::from_f32_slice(&ctx, &norm_w, vec![1, h_dim])?;
+                let d_normed = d_real_x.rms_norm(&ctx, &d_real_norm, 1e-6)?;
+                let d_real_q_q4 = harness_core::GpuQ4Tensor::from_f32_matrix(&ctx, &q_w_slice, h_dim, out_cols)?;
+                let d_real_out = d_normed.gemv_q4(&ctx, &d_real_q_q4)?.to_vec(&ctx)?;
+                println!("{}", "DONE".green());
+                println!(
+                    "        • Real GGUF Source:    {} ({} type={}, {} type={})",
+                    model_label.bold().cyan(),
+                    norm_info.name,
+                    norm_info.ggml_type,
+                    q_info.name,
+                    q_info.ggml_type
+                );
+                println!(
+                    "        • Real GPU Projection: [1x{}] -> [1x{}], sample y[0..3] = [{:.4}, {:.4}, {:.4}]\n",
+                    h_dim, out_cols, d_real_out[0], d_real_out[1], d_real_out[2]
+                );
+            } else {
+                println!("SKIPPED (no local GGUF blob found in ~/.ollama/models/blobs)\n");
+            }
 
             // Device-to-Host readback validation
             print!("  [*] Validating Mathematical Precision via GPU-to-Host Readback... ");

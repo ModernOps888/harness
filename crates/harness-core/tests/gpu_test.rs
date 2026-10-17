@@ -458,5 +458,118 @@ fn test_native_gpu_flash_attention_gqa_40_8() {
     }
 }
 
+#[test]
+fn test_native_gpu_sparse_gemv_q4_activation_pruning() {
+    use harness_core::gpu::GpuQ4Tensor;
+
+    let ctx = match GpuContext::new() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Skipping GPU test: {}", e);
+            return;
+        }
+    };
+
+    // K = 256 (8 blocks of 32), N = 4 output columns
+    // Make 6 of the 8 blocks of 32 activations near-zero (<= 1e-3) to trigger 75% block-skipping
+    let k = 256;
+    let n = 4;
+    let mut x_data = vec![0.0f32; k];
+    // Populate only blocks 1 (32..64) and 5 (160..192) with active features; others are tiny noise (1e-4)
+    for (i, val) in x_data.iter_mut().enumerate() {
+        let blk = i / 32;
+        if blk == 1 || blk == 5 {
+            *val = ((i as f32) * 0.11).sin() * 2.0;
+        } else {
+            *val = 1e-4;
+        }
+    }
+    let w_data: Vec<f32> = (0..(k * n)).map(|i| ((i as f32) * 0.03).cos()).collect();
+
+    let x_gpu = GpuTensor::from_f32_slice(&ctx, &x_data, vec![1, k]).unwrap();
+    let w_q4 = GpuQ4Tensor::from_f32_matrix(&ctx, &w_data, k, n).unwrap();
+
+    // 1. With threshold = 0.0, sparse_gemv_q4 must match dense gemv_q4 bit-accurately
+    let dense_res = x_gpu.gemv_q4(&ctx, &w_q4).unwrap().to_vec(&ctx).unwrap();
+    let sparse_zero_res = x_gpu.sparse_gemv_q4(&ctx, &w_q4, 0.0).unwrap().to_vec(&ctx).unwrap();
+    for col in 0..n {
+        assert!(
+            (dense_res[col] - sparse_zero_res[col]).abs() < 1e-4,
+            "Col {}: dense {} vs sparse(0.0) {}",
+            col,
+            dense_res[col],
+            sparse_zero_res[col]
+        );
+    }
+
+    // 2. With threshold = 1e-2, blocks with L_inf <= 1e-2 are skipped in GDDR7 while active blocks match
+    let sparse_pruned_res = x_gpu.sparse_gemv_q4(&ctx, &w_q4, 1e-2).unwrap().to_vec(&ctx).unwrap();
+    for col in 0..n {
+        assert!(
+            (dense_res[col] - sparse_pruned_res[col]).abs() < 0.05,
+            "Col {}: dense {} vs sparse(1e-2) {}",
+            col,
+            dense_res[col],
+            sparse_pruned_res[col]
+        );
+    }
+}
+
+#[test]
+fn test_native_gpu_moe_route_topk_128_experts() {
+    let ctx = match GpuContext::new() {
+        Ok(c) => c,
+        Err(e) => {
+            println!("Skipping GPU test: {}", e);
+            return;
+        }
+    };
+
+    // Qwen3-Coder-30B-A3B MoE geometry: 128 routed experts, Top-8 active per token, normalized weights
+    let num_tokens = 3;
+    let num_experts = 128;
+    let top_k = 8;
+
+    let mut logits = vec![0.0f32; num_tokens * num_experts];
+    for t in 0..num_tokens {
+        for e in 0..num_experts {
+            logits[t * num_experts + e] = ((t * 31 + e * 17) as f32 * 0.13).sin() * 3.0;
+        }
+        // Make expert (t * 10 + 5) the dominant expert
+        logits[t * num_experts + (t * 10 + 5)] = 9.5;
+    }
+
+    let logits_gpu = GpuTensor::from_f32_slice(&ctx, &logits, vec![num_tokens, num_experts]).unwrap();
+    let (indices, weights) = logits_gpu
+        .moe_route_topk(&ctx, num_experts, top_k, true)
+        .unwrap();
+
+    assert_eq!(indices.len(), num_tokens * top_k);
+    assert_eq!(weights.len(), num_tokens * top_k);
+
+    for t in 0..num_tokens {
+        let base = t * top_k;
+        // Dominant expert must be rank #0
+        assert_eq!(indices[base] as usize, t * 10 + 5);
+        // Normalized Top-8 weights must sum to 1.0 and be strictly descending
+        let sum_w: f32 = weights[base..(base + top_k)].iter().sum();
+        assert!(
+            (sum_w - 1.0).abs() < 1e-4,
+            "Token {} Top-8 weights sum to {} != 1.0",
+            t,
+            sum_w
+        );
+        for k_idx in 0..(top_k - 1) {
+            assert!(
+                weights[base + k_idx] >= weights[base + k_idx + 1] - 1e-6,
+                "Weights not sorted descending at token {}, rank {}",
+                t,
+                k_idx
+            );
+        }
+    }
+}
+
+
 
 

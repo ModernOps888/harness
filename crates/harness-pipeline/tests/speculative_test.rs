@@ -104,3 +104,43 @@ fn test_qwen25_coder_32b_vocab_alignment_and_llama_args() {
     assert_eq!(t_aligned.len(), 151_936);
 }
 
+#[test]
+fn test_online_draft_calibrator_and_repo_suffix_drafter() {
+    use harness_pipeline::{OnlineDraftCalibrator, RepoSuffixDrafter};
+
+    let mut calibrator = OnlineDraftCalibrator::new(0.45, 0.995);
+    // Suppose after context bigram (41, 42), the 0.5B drafter favors token 10, but the 32B verifier repeatedly emits token 11
+    let mut initial_logits = vec![0.0f32; 32];
+    initial_logits[10] = 2.5;
+    initial_logits[11] = 1.5;
+
+    let mut calibrated_before = initial_logits.clone();
+    calibrator.apply_logit_biases(41, 42, &mut calibrated_before);
+    assert!(calibrated_before[10] > calibrated_before[11]);
+
+    // Observe 6 speculative verification rejections where draft=10 was rejected in favor of target=11
+    for _ in 0..6 {
+        calibrator.observe_verification(41, 42, 10, 11, 0.70, 0.20);
+    }
+    assert_eq!(calibrator.total_updates, 6);
+
+    let mut calibrated_after = initial_logits.clone();
+    calibrator.apply_logit_biases(41, 42, &mut calibrated_after);
+    // Online cross-entropy gradient step shifts the draft distribution so token 11 now beats token 10!
+    assert!(
+        calibrated_after[11] > calibrated_after[10],
+        "Expected token 11 logit ({}) > token 10 logit ({})",
+        calibrated_after[11],
+        calibrated_after[10]
+    );
+
+    // Test RepoSuffixDrafter O(1) trigram continuation for repetitive Rust identifiers/syntax
+    let mut repo_drafter = RepoSuffixDrafter::new();
+    let repo_tokens = vec![10, 20, 30, 40, 50, 60, 70];
+    repo_drafter.index_tokens(&repo_tokens, 6);
+
+    let drafted = repo_drafter.draft_from_context(&[99, 10, 20, 30], 4);
+    assert_eq!(drafted, Some(vec![40, 50, 60, 70]));
+}
+
+

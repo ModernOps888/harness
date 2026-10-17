@@ -37,12 +37,23 @@ pub struct GpuContext {
 
     pub flash_attn_gqa_pipeline: wgpu::ComputePipeline,
     pub flash_attn_gqa_layout: wgpu::BindGroupLayout,
+
+    pub sparse_gemv_q4_pipeline: wgpu::ComputePipeline,
+    pub sparse_gemv_q4_layout: wgpu::BindGroupLayout,
+
+    pub moe_router_topk_pipeline: wgpu::ComputePipeline,
+    pub moe_router_topk_layout: wgpu::BindGroupLayout,
 }
 
 impl GpuContext {
     /// Initialize high-performance native GPU context
     pub fn new() -> Result<Self> {
         pollster::block_on(Self::new_async())
+    }
+
+    /// Synchronize host thread with GPU execution queue (waits for all submitted GPU passes to finish)
+    pub fn synchronize(&self) {
+        self.device.poll(wgpu::Maintain::Wait);
     }
 
     /// Async initializer requesting discrete GPU adapter
@@ -120,6 +131,14 @@ impl GpuContext {
         let (flash_attn_gqa_pipeline, flash_attn_gqa_layout) =
             Self::create_flash_attn_gqa_pipeline(&device)?;
 
+        // 6. Dynamic Activation-Sparse Q4 GEMV Pipeline
+        let (sparse_gemv_q4_pipeline, sparse_gemv_q4_layout) =
+            Self::create_sparse_gemv_q4_pipeline(&device)?;
+
+        // 7. Sparse MoE Top-K Softmax Router Pipeline
+        let (moe_router_topk_pipeline, moe_router_topk_layout) =
+            Self::create_moe_router_topk_pipeline(&device)?;
+
         Ok(Self {
             device,
             queue,
@@ -144,6 +163,10 @@ impl GpuContext {
             rope_layout,
             flash_attn_gqa_pipeline,
             flash_attn_gqa_layout,
+            sparse_gemv_q4_pipeline,
+            sparse_gemv_q4_layout,
+            moe_router_topk_pipeline,
+            moe_router_topk_layout,
         })
     }
 
@@ -804,5 +827,150 @@ impl GpuContext {
 
         Ok((pipeline, layout))
     }
+
+    fn create_sparse_gemv_q4_pipeline(
+        device: &wgpu::Device,
+    ) -> Result<(wgpu::ComputePipeline, wgpu::BindGroupLayout)> {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Sparse GEMV Q4 Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(SPARSE_GEMV_Q4_SHADER.into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Sparse GEMV Q4 Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Sparse GEMV Q4 Pipeline Layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Sparse GEMV Q4 Compute Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some("sparse_gemv_q4_decode"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        Ok((pipeline, layout))
+    }
+
+    fn create_moe_router_topk_pipeline(
+        device: &wgpu::Device,
+    ) -> Result<(wgpu::ComputePipeline, wgpu::BindGroupLayout)> {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("MoE Router TopK Shader Module"),
+            source: wgpu::ShaderSource::Wgsl(MOE_ROUTER_TOPK_SHADER.into()),
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("MoE Router TopK Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("MoE Router TopK Pipeline Layout"),
+            bind_group_layouts: &[&layout],
+            push_constant_ranges: &[],
+        });
+
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("MoE Router TopK Compute Pipeline"),
+            layout: Some(&pipeline_layout),
+            module: &module,
+            entry_point: Some("moe_route_topk"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        Ok((pipeline, layout))
+    }
 }
+
 

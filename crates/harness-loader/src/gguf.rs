@@ -193,6 +193,88 @@ impl GgufReader {
         Self::parse_header(&mmap)
     }
 
+    /// Extract and dequantize up to `max_elements` of a named tensor (`F32`, `F16`, `Q8_0`, `Q4_K`)
+    /// directly from a memory-mapped GGUF file on disk.
+    pub fn extract_tensor_f32<P: AsRef<Path>>(
+        path: P,
+        tensor_name: &str,
+        max_elements: usize,
+    ) -> Result<(GgufTensorInfo, Vec<f32>)> {
+        let p = path.as_ref();
+        let file = File::open(p).map_err(|e| {
+            HarnessError::ModelLoad(format!("Failed to open GGUF file {:?}: {}", p, e))
+        })?;
+        let mmap = unsafe { Mmap::map(&file)? };
+        let meta = Self::parse_header(&mmap)?;
+        let info = meta
+            .tensors
+            .iter()
+            .find(|t| t.name == tensor_name)
+            .cloned()
+            .ok_or_else(|| {
+                HarnessError::ModelLoad(format!("Tensor '{}' not found in GGUF", tensor_name))
+            })?;
+
+        let start = (meta.data_offset + info.offset) as usize;
+        let byte_len = info.byte_size();
+        if start.saturating_add(byte_len) > mmap.len() {
+            return Err(HarnessError::ModelLoad(format!(
+                "Tensor '{}' slice [{}..{}] exceeds GGUF file length {}",
+                tensor_name,
+                start,
+                start.saturating_add(byte_len),
+                mmap.len()
+            )));
+        }
+        let raw = &mmap[start..start + byte_len];
+        let total_elems = (info.num_elements() as usize).min(max_elements);
+
+        let values = match info.ggml_type {
+            0 => {
+                // F32
+                let count = total_elems.min(raw.len() / 4);
+                let mut out = Vec::with_capacity(count);
+                for i in 0..count {
+                    let b = [raw[i * 4], raw[i * 4 + 1], raw[i * 4 + 2], raw[i * 4 + 3]];
+                    out.push(f32::from_le_bytes(b));
+                }
+                out
+            }
+            1 => {
+                // F16
+                let count = total_elems.min(raw.len() / 2);
+                let mut out = Vec::with_capacity(count);
+                for i in 0..count {
+                    let h = u16::from_le_bytes([raw[i * 2], raw[i * 2 + 1]]);
+                    out.push(harness_quant::f16_to_f32(h));
+                }
+                out
+            }
+            7 => {
+                // Q8_0 (32 elements per 34-byte block)
+                let max_blocks = total_elems.div_ceil(32);
+                let mut out = harness_quant::dequantize_q8_0_bytes(raw, max_blocks);
+                out.truncate(total_elems);
+                out
+            }
+            12 => {
+                // Q4_K (256 elements per 144-byte super-block)
+                let max_blocks = total_elems.div_ceil(256);
+                let mut out = harness_quant::dequantize_q4_k_bytes(raw, max_blocks);
+                out.truncate(total_elems);
+                out
+            }
+            other => {
+                return Err(HarnessError::ModelLoad(format!(
+                    "Unsupported GGML tensor type {} for direct extraction on '{}'",
+                    other, tensor_name
+                )))
+            }
+        };
+
+        Ok((info, values))
+    }
+
     /// Parse GGUF v2/v3 header, full metadata KV table (all 13 types), and tensor descriptor table
     pub fn parse_header(bytes: &[u8]) -> Result<GgufMetadata> {
         if bytes.len() < 24 {
