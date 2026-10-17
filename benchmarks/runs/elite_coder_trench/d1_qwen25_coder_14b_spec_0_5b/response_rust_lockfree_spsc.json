@@ -1,0 +1,20 @@
+{
+  "config": "d1_qwen25_coder_14b_spec_0_5b",
+  "model": "sha256-0119ca9464dd3f5f759846e0fd5e0f149a7a5f1df77cad572ff41756f8e2d3ca",
+  "prompt_id": "rust_lockfree_spsc",
+  "timings": {
+    "predicted_n": 184,
+    "predicted_ms": 9547.31,
+    "predicted_per_second": 19.17,
+    "prompt_per_second": 39.75,
+    "draft_n": 157,
+    "draft_n_accepted": 155
+  },
+  "wall_s": 12.66,
+  "verification": {
+    "passed": true,
+    "stage": "run",
+    "stdout": "running 1 test\ntest trench_verify_ring_buffer ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "stderr": ""
+  }
+}

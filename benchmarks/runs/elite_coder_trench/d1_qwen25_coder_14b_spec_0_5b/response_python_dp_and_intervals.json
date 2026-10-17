@@ -1,0 +1,19 @@
+{
+  "config": "d1_qwen25_coder_14b_spec_0_5b",
+  "model": "sha256-0119ca9464dd3f5f759846e0fd5e0f149a7a5f1df77cad572ff41756f8e2d3ca",
+  "prompt_id": "python_dp_and_intervals",
+  "timings": {
+    "predicted_n": 286,
+    "predicted_ms": 17297.72,
+    "predicted_per_second": 16.48,
+    "prompt_per_second": 39.64,
+    "draft_n": 281,
+    "draft_n_accepted": 234
+  },
+  "wall_s": 19.85,
+  "verification": {
+    "passed": true,
+    "stdout": "PYTHON_10_OF_10_PASSED",
+    "stderr": ""
+  }
+}

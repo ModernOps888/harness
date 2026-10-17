@@ -1,0 +1,19 @@
+{
+  "config": "m3_qwen3_coder_30b_moe_spec_0_6b",
+  "model": "sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+  "prompt_id": "python_dp_and_intervals",
+  "timings": {
+    "predicted_n": 311,
+    "predicted_ms": 31120.97,
+    "predicted_per_second": 9.96,
+    "prompt_per_second": 66.56,
+    "draft_n": 299,
+    "draft_n_accepted": 240
+  },
+  "wall_s": 32.65,
+  "verification": {
+    "passed": true,
+    "stdout": "PYTHON_10_OF_10_PASSED",
+    "stderr": ""
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "name": "c5_dense32b_0_5b_ngl20_prio",
+  "description": "Qwen2.5-Coder-32B (-ngl 20) + 0.5B Drafter (-ngld 99) + --no-op-offload + Realtime Prio",
+  "model": "sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+  "server_args": [
+    "-ngl",
+    "20",
+    "-c",
+    "2048",
+    "-ctk",
+    "q8_0",
+    "-ctv",
+    "q4_0",
+    "-fa",
+    "on",
+    "--no-op-offload",
+    "--cache-reuse",
+    "64",
+    "-b",
+    "512",
+    "-ub",
+    "256",
+    "-t",
+    "6",
+    "-tb",
+    "10",
+    "--prio",
+    "2",
+    "--prio-batch",
+    "3",
+    "--poll",
+    "100",
+    "--model-draft",
+    "<USERPROFILE>\\.ollama\\models\\blobs\\sha256-20693aeb02c63304e263a72453b6ab89e1c700a87c6948cac523ac1e6f7cade0",
+    "-ngld",
+    "99",
+    "-ctkd",
+    "q8_0",
+    "-ctvd",
+    "q4_0",
+    "--spec-draft-n-max",
+    "7",
+    "--spec-draft-n-min",
+    "1",
+    "--spec-draft-p-min",
+    "0.68",
+    "--spec-type",
+    "draft-simple"
+  ],
+  "started": "2026-10-17T16:37:15",
+  "free_ram_gb_before": 24.09,
+  "smi_before": {
+    "time": "2026-10-17T16:37:15",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n910 MiB, 6986 MiB, 8151 MiB, 3, 8, 7001 MHz"
+  },
+  "prompts": {
+    "python_dp_and_intervals": {
+      "predicted_n": 306,
+      "predicted_ms": 79343.68,
+      "tok_per_s": 3.84,
+      "prompt_tok_per_s": 6.29,
+      "draft_n": 316,
+      "draft_accepted": 248,
+      "draft_acceptance_pct": 78.5,
+      "wall_s": 95.4,
+      "verification": {
+        "passed": true,
+        "stdout": "PYTHON_10_OF_10_PASSED",
+        "stderr": ""
+      }
+    },
+    "rust_lockfree_spsc": {
+      "predicted_n": 175,
+      "predicted_ms": 36215.14,
+      "tok_per_s": 4.8,
+      "prompt_tok_per_s": 6.33,
+      "draft_n": 157,
+      "draft_accepted": 151,
+      "draft_acceptance_pct": 96.2,
+      "wall_s": 55.68,
+      "verification": {
+        "passed": true,
+        "stage": "run",
+        "stdout": "running 1 test\ntest trench_verify_ring_buffer ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "stderr": ""
+      }
+    },
+    "async_deadlock_audit": {
+      "predicted_n": 147,
+      "predicted_ms": 45399.79,
+      "tok_per_s": 3.22,
+      "prompt_tok_per_s": 6.31,
+      "draft_n": 111,
+      "draft_accepted": 100,
+      "draft_acceptance_pct": 90.1,
+      "wall_s": 65.71,
+      "verification": {
+        "passed": true
+      }
+    }
+  },
+  "ready": {
+    "ok": true,
+    "msg": "ready in 56.5s"
+  },
+  "smi_loaded": {
+    "time": "2026-10-17T16:38:12",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n7592 MiB, 304 MiB, 8151 MiB, 3, 8, 7001 MHz"
+  },
+  "free_ram_gb_loaded": 10.5,
+  "pooled_tok_s": 3.9,
+  "pooled_draft_acceptance_pct": 85.4,
+  "tests_passed": "3/3",
+  "finished": "2026-10-17T16:42:13",
+  "log_stats": {
+    "cuda_model_mib": 6013.18,
+    "cpu_model_mib": 12912.83,
+    "graph_splits": 40
+  }
+}

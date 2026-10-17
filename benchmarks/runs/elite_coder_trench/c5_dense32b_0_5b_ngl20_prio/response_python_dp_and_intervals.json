@@ -1,0 +1,19 @@
+{
+  "config": "c5_dense32b_0_5b_ngl20_prio",
+  "model": "sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+  "prompt_id": "python_dp_and_intervals",
+  "timings": {
+    "predicted_n": 306,
+    "predicted_ms": 79343.68,
+    "predicted_per_second": 3.84,
+    "prompt_per_second": 6.29,
+    "draft_n": 316,
+    "draft_n_accepted": 248
+  },
+  "wall_s": 95.4,
+  "verification": {
+    "passed": true,
+    "stdout": "PYTHON_10_OF_10_PASSED",
+    "stderr": ""
+  }
+}

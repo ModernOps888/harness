@@ -1,0 +1,112 @@
+{
+  "name": "m2_qwen3_coder_30b_moe_ncmoe32_ngram",
+  "description": "Qwen3-Coder-30B-A3B Sparse MoE (-ngl 99 --n-cpu-moe 32 + ngram-mod Speculative)",
+  "model": "sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+  "server_args": [
+    "-ngl",
+    "99",
+    "--n-cpu-moe",
+    "32",
+    "-c",
+    "2048",
+    "-ctk",
+    "q8_0",
+    "-ctv",
+    "q4_0",
+    "-fa",
+    "on",
+    "--no-op-offload",
+    "--cache-reuse",
+    "64",
+    "-b",
+    "512",
+    "-ub",
+    "256",
+    "-t",
+    "6",
+    "-tb",
+    "10",
+    "--prio",
+    "2",
+    "--prio-batch",
+    "3",
+    "--poll",
+    "100",
+    "--spec-type",
+    "ngram-mod",
+    "--spec-draft-n-max",
+    "8",
+    "--spec-draft-n-min",
+    "2"
+  ],
+  "started": "2026-10-17T16:33:01",
+  "free_ram_gb_before": 24.29,
+  "smi_before": {
+    "time": "2026-10-17T16:33:01",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n988 MiB, 6908 MiB, 8151 MiB, 3, 8, 14001 MHz"
+  },
+  "prompts": {
+    "python_dp_and_intervals": {
+      "predicted_n": 302,
+      "predicted_ms": 19507.42,
+      "tok_per_s": 15.43,
+      "prompt_tok_per_s": 76.18,
+      "draft_n": 0,
+      "draft_accepted": 0,
+      "draft_acceptance_pct": null,
+      "wall_s": 20.85,
+      "verification": {
+        "passed": true,
+        "stdout": "PYTHON_10_OF_10_PASSED",
+        "stderr": ""
+      }
+    },
+    "rust_lockfree_spsc": {
+      "predicted_n": 175,
+      "predicted_ms": 11016.33,
+      "tok_per_s": 15.79,
+      "prompt_tok_per_s": 76.55,
+      "draft_n": 0,
+      "draft_accepted": 0,
+      "draft_acceptance_pct": null,
+      "wall_s": 12.65,
+      "verification": {
+        "passed": true,
+        "stage": "run",
+        "stdout": "running 1 test\ntest trench_verify_ring_buffer ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+        "stderr": ""
+      }
+    },
+    "async_deadlock_audit": {
+      "predicted_n": 190,
+      "predicted_ms": 12872.13,
+      "tok_per_s": 14.68,
+      "prompt_tok_per_s": 77.35,
+      "draft_n": 64,
+      "draft_accepted": 5,
+      "draft_acceptance_pct": 7.8,
+      "wall_s": 14.54,
+      "verification": {
+        "passed": true
+      }
+    }
+  },
+  "ready": {
+    "ok": true,
+    "msg": "ready in 58.1s"
+  },
+  "smi_loaded": {
+    "time": "2026-10-17T16:34:00",
+    "raw": "memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]\n7535 MiB, 361 MiB, 8151 MiB, 3, 8, 7001 MHz"
+  },
+  "free_ram_gb_loaded": 12.44,
+  "pooled_tok_s": 15.37,
+  "pooled_draft_acceptance_pct": 7.8,
+  "tests_passed": "3/3",
+  "finished": "2026-10-17T16:34:52",
+  "log_stats": {
+    "cuda_model_mib": 6463.42,
+    "cpu_model_mib": 11227.92,
+    "graph_splits": 162
+  }
+}

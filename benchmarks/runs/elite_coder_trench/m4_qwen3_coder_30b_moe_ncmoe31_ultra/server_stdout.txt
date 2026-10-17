@@ -1,0 +1,6 @@
+main: server is listening on http://127.0.0.1:8089 - starting the main loop
+load_tensors: CUDA0 model buffer size = 6787.42 MiB
+load_tensors: CPU_Mapped model buffer size = 10903.92 MiB
+llama_context: graph splits = 160
+smi_after_load: memory.used [MiB], memory.free [MiB], memory.total [MiB], pcie.link.gen.current, pcie.link.width.current, clocks.current.memory [MHz]
+7646 MiB, 250 MiB, 8151 MiB, 3, 8, 13801 MHz

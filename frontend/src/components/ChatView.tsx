@@ -29,7 +29,9 @@ export const ChatView: React.FC<Props> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isStreaming) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }, [messages, isStreaming]);
 
   const handleSubmit = (e: React.FormEvent) => {

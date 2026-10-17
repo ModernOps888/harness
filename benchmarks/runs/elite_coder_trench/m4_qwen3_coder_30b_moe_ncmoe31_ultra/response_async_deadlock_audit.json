@@ -1,0 +1,17 @@
+{
+  "config": "m4_qwen3_coder_30b_moe_ncmoe31_ultra",
+  "model": "sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+  "prompt_id": "async_deadlock_audit",
+  "timings": {
+    "predicted_n": 183,
+    "predicted_ms": 13975.96,
+    "predicted_per_second": 13.02,
+    "prompt_per_second": 55.78,
+    "draft_n": 0,
+    "draft_n_accepted": 0
+  },
+  "wall_s": 16.28,
+  "verification": {
+    "passed": true
+  }
+}

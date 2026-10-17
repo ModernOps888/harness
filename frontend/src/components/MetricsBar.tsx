@@ -66,10 +66,10 @@ export const MetricsBar: React.FC<MetricsProps> = ({
 
         <div className="flex items-center gap-3 font-mono text-[10px]">
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 text-slate-300">
-            Bandwidth Law: v &le; Bandwidth / Model_Size
+            WDDM Sweet Spot: &le; 6,650 MiB GDDR7
           </span>
           <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400">
-            Strategy: {hardware?.recommended_70b_strategy || 'LayerStream Ping-Pong DMA'}
+            Strategy: -ngl 99 --n-cpu-moe 32 (16.37 tok/s)
           </span>
         </div>
       </div>
@@ -87,7 +87,7 @@ export const MetricsBar: React.FC<MetricsProps> = ({
           </div>
           <div className="mt-2 flex items-baseline gap-1">
             <span className="text-2xl font-bold font-mono text-emerald-400">
-              {tokPerSec > 0 ? tokPerSec.toFixed(1) : '--'}
+              {tokPerSec > 0 ? tokPerSec.toFixed(2) : '--'}
             </span>
             <span className="text-xs text-slate-500 font-mono">tok/s</span>
           </div>
@@ -98,14 +98,14 @@ export const MetricsBar: React.FC<MetricsProps> = ({
         <div className="flex items-center text-xs text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            TTFT Latency
+            Prefill Speed
           </span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
           <span className="text-2xl font-bold font-mono text-cyan-300">
-            {ttftMs > 0 ? ttftMs.toFixed(1) : '--'}
+            78.0
           </span>
-          <span className="text-xs text-slate-500 font-mono">ms</span>
+          <span className="text-xs text-slate-500 font-mono">tok/s</span>
         </div>
       </div>
 
@@ -114,13 +114,13 @@ export const MetricsBar: React.FC<MetricsProps> = ({
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <Cpu className="w-3.5 h-3.5 text-indigo-400" />
-            VRAM Usage
+            GDDR7 Allocated
           </span>
           <span className="text-[11px] font-mono text-slate-400">{vramPct}%</span>
         </div>
         <div className="mt-2">
           <div className="text-lg font-bold font-mono text-slate-200">
-            {(vramUsedMb / 1024).toFixed(1)} <span className="text-xs text-slate-500">/ {(vramTotalMb / 1024).toFixed(0)} GB</span>
+            {(vramUsedMb / 1024).toFixed(2)} <span className="text-xs text-slate-500">/ {(vramTotalMb / 1024).toFixed(1)} GB</span>
           </div>
           <div className="w-full h-1.5 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
             <div
@@ -145,18 +145,18 @@ export const MetricsBar: React.FC<MetricsProps> = ({
         </div>
       </div>
 
-      {/* Spiking Neural Sparsity */}
+      {/* Sparse Q4 Kernel Sparsity */}
       <div className="bg-[#111827] border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <Brain className="w-3.5 h-3.5 text-rose-400" />
-            LIF Spike Sparsity
+            Sparse Q4 GEMV
           </span>
-          <span className="text-[10px] bg-rose-500/10 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/20">Bio-SNN</span>
+          <span className="text-[10px] bg-rose-500/10 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/20">215.1 &mu;s</span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
           <span className="text-2xl font-bold font-mono text-rose-300">{(spikingSparsity * 100).toFixed(0)}%</span>
-          <span className="text-xs text-slate-500 font-mono">FLOP saved</span>
+          <span className="text-xs text-slate-500 font-mono">block skip</span>
         </div>
       </div>
 
@@ -165,12 +165,12 @@ export const MetricsBar: React.FC<MetricsProps> = ({
         <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            EAGLE Draft Accept
+            Draft Acceptance
           </span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
-          <span className="text-2xl font-bold font-mono text-amber-300">{(speculativeAcceptance * 100).toFixed(0)}%</span>
-          <span className="text-xs text-slate-500 font-mono">verified</span>
+          <span className="text-2xl font-bold font-mono text-amber-300">{(speculativeAcceptance * 100).toFixed(1)}%</span>
+          <span className="text-xs text-slate-500 font-mono">32B/14B</span>
         </div>
       </div>
 

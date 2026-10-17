@@ -1,0 +1,20 @@
+{
+  "config": "c6_dense32b_0_5b_ngl21_ultra",
+  "model": "sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+  "prompt_id": "rust_lockfree_spsc",
+  "timings": {
+    "predicted_n": 169,
+    "predicted_ms": 41190.12,
+    "predicted_per_second": 4.08,
+    "prompt_per_second": 6.43,
+    "draft_n": 152,
+    "draft_n_accepted": 145
+  },
+  "wall_s": 60.34,
+  "verification": {
+    "passed": true,
+    "stage": "run",
+    "stdout": "running 1 test\ntest trench_verify_ring_buffer ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "stderr": ""
+  }
+}

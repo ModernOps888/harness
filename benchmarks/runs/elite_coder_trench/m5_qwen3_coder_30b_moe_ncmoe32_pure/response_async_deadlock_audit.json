@@ -1,0 +1,17 @@
+{
+  "config": "m5_qwen3_coder_30b_moe_ncmoe32_pure",
+  "model": "sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+  "prompt_id": "async_deadlock_audit",
+  "timings": {
+    "predicted_n": 182,
+    "predicted_ms": 11049.51,
+    "predicted_per_second": 16.38,
+    "prompt_per_second": 77.96,
+    "draft_n": 0,
+    "draft_n_accepted": 0
+  },
+  "wall_s": 12.71,
+  "verification": {
+    "passed": true
+  }
+}

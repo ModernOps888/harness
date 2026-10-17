@@ -1,0 +1,17 @@
+{
+  "config": "c6_dense32b_0_5b_ngl21_ultra",
+  "model": "sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+  "prompt_id": "async_deadlock_audit",
+  "timings": {
+    "predicted_n": 147,
+    "predicted_ms": 50818.52,
+    "predicted_per_second": 2.87,
+    "prompt_per_second": 6.42,
+    "draft_n": 118,
+    "draft_n_accepted": 102
+  },
+  "wall_s": 70.81,
+  "verification": {
+    "passed": true
+  }
+}

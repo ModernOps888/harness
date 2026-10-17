@@ -1,0 +1,17 @@
+{
+  "config": "d1_qwen25_coder_14b_spec_0_5b",
+  "model": "sha256-0119ca9464dd3f5f759846e0fd5e0f149a7a5f1df77cad572ff41756f8e2d3ca",
+  "prompt_id": "async_deadlock_audit",
+  "timings": {
+    "predicted_n": 190,
+    "predicted_ms": 14688.77,
+    "predicted_per_second": 12.87,
+    "prompt_per_second": 39.61,
+    "draft_n": 132,
+    "draft_n_accepted": 117
+  },
+  "wall_s": 17.96,
+  "verification": {
+    "passed": true
+  }
+}

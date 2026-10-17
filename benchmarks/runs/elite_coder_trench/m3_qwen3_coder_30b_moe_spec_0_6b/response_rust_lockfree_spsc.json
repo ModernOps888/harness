@@ -1,0 +1,20 @@
+{
+  "config": "m3_qwen3_coder_30b_moe_spec_0_6b",
+  "model": "sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+  "prompt_id": "rust_lockfree_spsc",
+  "timings": {
+    "predicted_n": 175,
+    "predicted_ms": 11007.4,
+    "predicted_per_second": 15.81,
+    "prompt_per_second": 67.29,
+    "draft_n": 167,
+    "draft_n_accepted": 137
+  },
+  "wall_s": 12.86,
+  "verification": {
+    "passed": true,
+    "stage": "run",
+    "stdout": "running 1 test\ntest trench_verify_ring_buffer ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "stderr": ""
+  }
+}
