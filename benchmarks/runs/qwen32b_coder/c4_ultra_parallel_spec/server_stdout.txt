@@ -13,8 +13,8 @@
 0.03.291.925 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
 0.03.291.925 W srv  llama_server: -----------------
 0.03.291.973 I srv         start: binding port with default address family
-0.03.301.645 I srv    load_model: loading model 'C:\Users\bchmi\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9'
-0.03.301.651 I srv    load_model: local path 'C:\Users\bchmi\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9'
+0.03.301.645 I srv    load_model: loading model '<USER_HOME>\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9'
+0.03.301.651 I srv    load_model: local path '<USER_HOME>\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9'
 0.03.301.673 I cmn  common_init_: fitting params to device memory ...
 0.03.301.674 I cmn  common_init_: (for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on)
 0.03.301.722 I common_params_fit_impl: getting device memory data for initial parameters:
@@ -30,7 +30,7 @@
 0.04.025.980 I common_params_fit_impl: context size set by user to 2048 -> no change
 0.04.026.088 W common_fit_params: failed to fit params to free device memory: n_gpu_layers already set by user to 18, abort
 0.04.026.093 I common_fit_params: fitting params to free memory took 0.72 seconds
-0.04.083.734 I llama_model_loader: loaded meta data with 34 key-value pairs and 771 tensors from C:\Users\bchmi\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9 (version GGUF V3 (latest))
+0.04.083.734 I llama_model_loader: loaded meta data with 34 key-value pairs and 771 tensors from <USER_HOME>\.ollama\models\blobs\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9 (version GGUF V3 (latest))
 0.04.083.780 I llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
 0.04.083.783 I llama_model_loader: - kv   0:                       general.architecture str              = qwen2
 0.04.083.784 I llama_model_loader: - kv   1:                               general.type str              = model
@@ -194,8 +194,8 @@
 0.58.483.863 I sched_reserve: reserve took 20.21 ms, sched copies = 1
 0.58.484.113 I cmn          init: llama threadpool init, n_threads = 6
 0.58.485.159 I cmn  common_init_: warming up the model with an empty run - please wait ... (--no-warmup to disable)
-0.59.651.772 I common_speculative_init_result: loading draft model 'C:\Users\bchmi\.ollama\models\blobs\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104'
-0.59.727.335 I llama_model_loader: loaded meta data with 34 key-value pairs and 338 tensors from C:\Users\bchmi\.ollama\models\blobs\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104 (version GGUF V3 (latest))
+0.59.651.772 I common_speculative_init_result: loading draft model '<USER_HOME>\.ollama\models\blobs\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104'
+0.59.727.335 I llama_model_loader: loaded meta data with 34 key-value pairs and 338 tensors from <USER_HOME>\.ollama\models\blobs\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104 (version GGUF V3 (latest))
 0.59.727.359 I llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
 0.59.727.362 I llama_model_loader: - kv   0:                       general.architecture str              = qwen2
 0.59.727.364 I llama_model_loader: - kv   1:                               general.type str              = model

@@ -1329,9 +1329,9 @@
       {
         "config": "c4_ultra_parallel_spec",
         "cmd": [
-          "C:\\Users\\bchmi\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+          "<USER_HOME>\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
           "--model",
-          "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+          "<USER_HOME>\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
           "--load-mode",
           "none",
           "-np",
@@ -1365,7 +1365,7 @@
           "-ngl",
           "18",
           "--model-draft",
-          "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104",
+          "<USER_HOME>\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104",
           "-ngld",
           "99",
           "-ctkd",
@@ -1406,7 +1406,7 @@
           "0.58.483.861 I sched_reserve:  CUDA_Host compute buffer size =    48.58 MiB",
           "0.58.483.861 I sched_reserve: graph splits = 36",
           "0.58.484.113 I cmn          init: llama threadpool init, n_threads = 6",
-          "0.59.651.772 I common_speculative_init_result: loading draft model 'C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104'",
+          "0.59.651.772 I common_speculative_init_result: loading draft model '<USER_HOME>\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104'",
           "1.00.600.091 I load_tensors: offloaded 29/29 layers to GPU",
           "1.00.600.095 I load_tensors:        CUDA0 model buffer size =   934.70 MiB",
           "1.00.600.096 I load_tensors:    CUDA_Host model buffer size =   182.57 MiB",
@@ -2416,7 +2416,7 @@
       "name": "a_ctx2k_ncmoe32_baseline",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "32",
         "-c",
@@ -2471,7 +2471,7 @@
       "name": "g_ctx16k_q8q8_ncmoe34",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "34",
         "-c",
@@ -2542,7 +2542,7 @@
       "name": "h_ctx16k_q8q4_ncmoe34_control",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "34",
         "-c",
@@ -2613,7 +2613,7 @@
       "name": "i_ctx16k_q8q8_ncmoe34_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "34",
         "-c",
@@ -2683,7 +2683,7 @@
       "name": "o_ctx16k_f16_ncmoe34_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "34",
         "-c",
@@ -2753,7 +2753,7 @@
       "name": "p_ctx32k_q8q8_ncmoe38_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "38",
         "-c",
@@ -2823,7 +2823,7 @@
       "name": "r_ctx32k_q8q8_ncmoe36_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "36",
         "-c",
@@ -2893,7 +2893,7 @@
       "name": "s_ctx32k_q8q8_ncmoe37_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "37",
         "-c",
@@ -2963,7 +2963,7 @@
       "name": "t_ctx64k_q8q8_ncmoe42_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "42",
         "-c",
@@ -3033,7 +3033,7 @@
       "name": "u_ctx64k_q8q8_ncmoe44_gpuprefill",
       "args": [
         "--model",
-        "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+        "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
         "--n-cpu-moe",
         "44",
         "-c",

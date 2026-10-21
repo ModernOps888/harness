@@ -216,7 +216,9 @@ def main():
         results.append(r)
         print(f"[{t['id']}] resolved={r['resolved']} visible={r['visible_pass']} hidden={r['hidden_pass']} turns={r['turns']} "
               f"tools={len(r['tool_calls'])} wall={r['wall_s']}s err={r['error']}", flush=True)
-        json.dump(results, open(os.path.join(OUT_ROOT, f"{a.tag}.json"), "w", encoding="utf-8"), indent=1)
+        raw_json = json.dumps(results, indent=1)
+        raw_json = re.sub(r"[A-Za-z]:(?:\\\\|\\|/)+Users(?:\\\\|\\|/)+[^\\\\/\"'\s]+", "<USER_HOME>", raw_json, flags=re.I)
+        open(os.path.join(OUT_ROOT, f"{a.tag}.json"), "w", encoding="utf-8").write(raw_json)
     n = len(results)
     res = sum(r["resolved"] for r in results)
     print(f"\nRESOLVED {res}/{n} = {100*res/max(n,1):.1f}%")

@@ -1,10 +1,10 @@
 {
   "name": "c4_ultra_parallel_spec",
-  "model": "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+  "model": "<USER_HOME>\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
   "cmd": [
-    "C:\\Users\\bchmi\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
+    "<USER_HOME>\\AppData\\Local\\Programs\\Ollama\\lib\\ollama\\llama-server.exe",
     "--model",
-    "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
+    "<USER_HOME>\\.ollama\\models\\blobs\\sha256-ac3d1ba8aa77755dab3806d9024e9c385ea0d5b412d6bdf9157f8a4a7e9fc0d9",
     "--load-mode",
     "none",
     "-np",
@@ -38,7 +38,7 @@
     "-ngl",
     "18",
     "--model-draft",
-    "C:\\Users\\bchmi\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104",
+    "<USER_HOME>\\.ollama\\models\\blobs\\sha256-29d8c98fa6b098e200069bfb88b9508dc3e85586d20cba59f8dda9a808165104",
     "-ngld",
     "99",
     "-ctkd",

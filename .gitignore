@@ -27,3 +27,10 @@ __pycache__/
 
 .vscode-test/
 vscode-extension/node_modules/
+*.vsix
+*.server.log
+benchmarks/runs/**/_*
+.venv/
+venv/
+*.pyc
+

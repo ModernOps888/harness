@@ -120,7 +120,9 @@ def run(name):
         except Exception:
             proc.kill()
         logf.close()
-    json.dump(res, open(os.path.join(OUT, f"{name}.json"), "w", encoding="utf-8"), indent=2)
+    raw_json = json.dumps(res, indent=2)
+    raw_json = re.sub(r"[A-Za-z]:(?:\\\\|\\|/)+Users(?:\\\\|\\|/)+[^\\\\/\"'\s]+", "<USER_HOME>", raw_json, flags=re.I)
+    open(os.path.join(OUT, f"{name}.json"), "w", encoding="utf-8").write(raw_json)
     return res
 
 

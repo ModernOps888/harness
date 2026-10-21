@@ -15,6 +15,13 @@ RUNS = os.path.join(HERE, "runs")
 PROMPTS = ["prose", "code", "quote"]
 BASELINE = "c0_default_fit"
 
+PII_PATH_RE = re.compile(r"[A-Za-z]:(?:\\\\|\\|/)+Users(?:\\\\|\\|/)+[^\\\\/\"'\s]+", re.IGNORECASE)
+
+
+def redact_pii(text: str) -> str:
+    return PII_PATH_RE.sub("<USER_HOME>", text)
+
+
 
 def load(cfg):
     d = os.path.join(RUNS, cfg)
@@ -368,7 +375,7 @@ def write_json(cfgs, base_res):
     if os.path.exists(he_fp):
         out["humaneval_plus"] = json.load(open(he_fp, encoding="utf-8"))
     with open(os.path.join(RUNS, "results.json"), "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=2)
+        f.write(redact_pii(json.dumps(out, indent=2)))
     extra = ["", "## Computed cross-check: implied CPU-side weight read rate (plain autoregressive configs only)", "",
              "`(26,375,113,056 B - GPU model buffer from the verbose probe log) x pooled tok/s`. This is arithmetic on logged "
              "values, not a bandwidth measurement; `hardware.txt` gives the calculated DDR4 peak for comparison.", "",
@@ -379,7 +386,7 @@ def write_json(cfgs, base_res):
             extra.append(f"| {e['config']} | {g['offloaded']}/{g['total']} | {e['cpu_resident_weights_gb']:.2f} | "
                          f"{e['pooled_tok_s']:.3f} | {e['implied_cpu_read_gb_s']:.1f} |")
     with open(os.path.join(RUNS, "RESULTS.md"), "a", encoding="utf-8") as f:
-        f.write("\n".join(extra) + "\n")
+        f.write(redact_pii("\n".join(extra) + "\n"))
 
 
 if __name__ == "__main__":

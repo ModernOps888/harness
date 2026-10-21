@@ -2,7 +2,7 @@
   "name": "i_ctx16k_q8q8_ncmoe34_gpuprefill",
   "args": [
     "--model",
-    "C:\\Users\\bchmi/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
+    "<USER_HOME>/.ollama/models\\blobs\\sha256-1194192cf2a187eb02722edcc3f77b11d21f537048ce04b67ccf8ba78863006a",
     "--n-cpu-moe",
     "34",
     "-c",
