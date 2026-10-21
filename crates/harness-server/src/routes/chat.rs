@@ -205,10 +205,16 @@ fn take_harness_flags(body: &mut Value) -> HarnessFlags {
 /// Normalize incoming OpenAI-compatible tool schemas and messages so strict Jinja chat templates
 /// (such as Qwen3-Coder in `llama-server --jinja`) never crash on VS Code `customendpoint`
 /// parameterless tools (e.g. `{"type": "object"}` without `"properties": {}`) or `"role": "developer"`.
-fn normalize_json_schema(schema: &mut Value) {
+/// Also compacts bloated MCP tool schemas when IDE AgentHost attaches dozens of MCP tools at once.
+fn normalize_json_schema(schema: &mut Value, strip_prose: bool) {
     let Some(obj) = schema.as_object_mut() else {
         return;
     };
+    if strip_prose {
+        for noisy_key in ["description", "title", "examples", "default", "$schema"] {
+            obj.remove(noisy_key);
+        }
+    }
     let is_object_type = obj.get("type").and_then(|v| v.as_str()) == Some("object");
     let has_properties_obj = obj.get("properties").map(|v| v.is_object()).unwrap_or(false);
     if is_object_type && !obj.contains_key("properties") {
@@ -219,27 +225,45 @@ fn normalize_json_schema(schema: &mut Value) {
     }
     if let Some(props) = obj.get_mut("properties").and_then(|v| v.as_object_mut()) {
         for (_, prop_schema) in props.iter_mut() {
-            normalize_json_schema(prop_schema);
+            normalize_json_schema(prop_schema, strip_prose);
         }
     }
     if let Some(items) = obj.get_mut("items") {
-        normalize_json_schema(items);
+        normalize_json_schema(items, strip_prose);
     }
     for key in ["anyOf", "oneOf", "allOf"] {
         if let Some(arr) = obj.get_mut(key).and_then(|v| v.as_array_mut()) {
             for sub in arr.iter_mut() {
-                normalize_json_schema(sub);
+                normalize_json_schema(sub, strip_prose);
             }
         }
     }
 }
 
+fn compact_description(desc: &str, max_chars: usize) -> String {
+    let first_line = desc.lines().next().unwrap_or("").trim();
+    let first_sentence = first_line.split(". ").next().unwrap_or(first_line).trim();
+    if first_sentence.chars().count() <= max_chars {
+        first_sentence.to_string()
+    } else {
+        first_sentence.chars().take(max_chars).collect()
+    }
+}
+
 fn normalize_openai_request(body: &mut Value) {
+    let mut user_text_lower = String::new();
     if let Some(msgs) = body.get_mut("messages").and_then(|m| m.as_array_mut()) {
         for msg in msgs.iter_mut() {
             if let Some(obj) = msg.as_object_mut() {
-                if obj.get("role").and_then(|r| r.as_str()) == Some("developer") {
+                let role = obj.get("role").and_then(|r| r.as_str()).unwrap_or("").to_string();
+                if role == "developer" {
                     obj.insert("role".to_string(), json!("system"));
+                }
+                if role == "user" {
+                    if let Some(c) = obj.get("content") {
+                        user_text_lower.push_str(&content_text(c).to_lowercase());
+                        user_text_lower.push(' ');
+                    }
                 }
                 if obj.get("role").and_then(|r| r.as_str()) == Some("assistant")
                     && obj.contains_key("tool_calls")
@@ -250,9 +274,50 @@ fn normalize_openai_request(body: &mut Value) {
             }
         }
     }
+    let mut has_many_tools = false;
     if let Some(tools) = body.get_mut("tools").and_then(|t| t.as_array_mut()) {
+        has_many_tools = tools.len() > 10;
+        // When VS Code AgentHost / Copilot CLI attaches 5+ MCP servers (e.g. 40+ GitHub remote MCP tools
+        // + Android mobile tools + 35 built-in tools = 80+ tools), filter out heavy external domain
+        // MCP tools unless the user prompt mentions their domain, so prefill stays fast and fits 32k ctx.
+        if tools.len() > 20 {
+            let wants_mobile = ["mobile", "android", "device", "phone", "adb", "emulator", "artemis", "screen"]
+                .iter()
+                .any(|kw| user_text_lower.contains(kw));
+            let wants_github = ["github", "issue", "pull request", "pull_request", "pr ", "branch", "fork", "gist", "workflow", "action"]
+                .iter()
+                .any(|kw| user_text_lower.contains(kw));
+            tools.retain(|tool| {
+                let name = tool
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                if !wants_mobile && (name.starts_with("mobile_") || name.contains("artemis")) {
+                    return false;
+                }
+                if !wants_github
+                    && (name.contains("github")
+                        || name.starts_with("mcp_github")
+                        || name.starts_with("github_")
+                        || name.ends_with("_pull_request")
+                        || name.ends_with("_issue")
+                        || name.ends_with("_issues"))
+                {
+                    return false;
+                }
+                true
+            });
+        }
+        let strip_prose = tools.len() > 10;
         for tool in tools.iter_mut() {
             if let Some(func) = tool.get_mut("function").and_then(|f| f.as_object_mut()) {
+                if strip_prose {
+                    if let Some(desc) = func.get("description").and_then(|d| d.as_str()).map(|s| s.to_string()) {
+                        func.insert("description".to_string(), json!(compact_description(&desc, 96)));
+                    }
+                }
                 let params = func
                     .entry("parameters".to_string())
                     .or_insert_with(|| json!({"type": "object", "properties": {}}));
@@ -267,7 +332,18 @@ fn normalize_openai_request(body: &mut Value) {
                             pobj.insert("properties".to_string(), json!({}));
                         }
                     }
-                    normalize_json_schema(params);
+                    normalize_json_schema(params, strip_prose);
+                }
+            }
+        }
+    }
+    if has_many_tools {
+        if let Some(obj) = body.as_object_mut() {
+            for key in ["max_tokens", "max_completion_tokens"] {
+                if let Some(mt) = obj.get(key).and_then(|v| v.as_u64()) {
+                    if mt > 4096 {
+                        obj.insert(key.to_string(), json!(4096));
+                    }
                 }
             }
         }

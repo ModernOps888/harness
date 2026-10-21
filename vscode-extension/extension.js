@@ -88,9 +88,12 @@ class HarnessProvider {
           name: `${id} (HARNESS local)`,
           family: 'harness',
           version: '1.0.0',
-          tooltip: `Local model served by HARNESS. Runtime context ${ctx} tokens.`,
+          tooltip: `Local model served by HARNESS. Runtime context ${ctx} tokens (server compacts large MCP tool sets to fit).`,
           detail: `local \u00b7 ${ctx.toLocaleString()} ctx`,
-          maxInputTokens: Math.max(1024, ctx - maxOutputTokens),
+          // Advertise >=128k budget to VS Code's AgentHost / copilot-runtime so its pre-send
+          // `compaction_static_context_blocked` check does not abort when 5+ MCP servers are enabled;
+          // harness-server compacts incoming tool schemas so the real prompt fits inside `ctx`.
+          maxInputTokens: Math.max(128000, ctx - maxOutputTokens),
           maxOutputTokens,
           capabilities: { toolCalling: true, imageInput: false },
         };
