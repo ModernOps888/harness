@@ -202,6 +202,78 @@ fn take_harness_flags(body: &mut Value) -> HarnessFlags {
     HarnessFlags { constrained_mode: cm, lateral_contrast: lc, spiking_threshold: st }
 }
 
+/// Normalize incoming OpenAI-compatible tool schemas and messages so strict Jinja chat templates
+/// (such as Qwen3-Coder in `llama-server --jinja`) never crash on VS Code `customendpoint`
+/// parameterless tools (e.g. `{"type": "object"}` without `"properties": {}`) or `"role": "developer"`.
+fn normalize_json_schema(schema: &mut Value) {
+    let Some(obj) = schema.as_object_mut() else {
+        return;
+    };
+    let is_object_type = obj.get("type").and_then(|v| v.as_str()) == Some("object");
+    let has_properties_obj = obj.get("properties").map(|v| v.is_object()).unwrap_or(false);
+    if is_object_type && !obj.contains_key("properties") {
+        obj.insert("properties".to_string(), json!({}));
+    }
+    if has_properties_obj && !obj.contains_key("type") {
+        obj.insert("type".to_string(), json!("object"));
+    }
+    if let Some(props) = obj.get_mut("properties").and_then(|v| v.as_object_mut()) {
+        for (_, prop_schema) in props.iter_mut() {
+            normalize_json_schema(prop_schema);
+        }
+    }
+    if let Some(items) = obj.get_mut("items") {
+        normalize_json_schema(items);
+    }
+    for key in ["anyOf", "oneOf", "allOf"] {
+        if let Some(arr) = obj.get_mut(key).and_then(|v| v.as_array_mut()) {
+            for sub in arr.iter_mut() {
+                normalize_json_schema(sub);
+            }
+        }
+    }
+}
+
+fn normalize_openai_request(body: &mut Value) {
+    if let Some(msgs) = body.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        for msg in msgs.iter_mut() {
+            if let Some(obj) = msg.as_object_mut() {
+                if obj.get("role").and_then(|r| r.as_str()) == Some("developer") {
+                    obj.insert("role".to_string(), json!("system"));
+                }
+                if obj.get("role").and_then(|r| r.as_str()) == Some("assistant")
+                    && obj.contains_key("tool_calls")
+                    && !obj.contains_key("content")
+                {
+                    obj.insert("content".to_string(), Value::Null);
+                }
+            }
+        }
+    }
+    if let Some(tools) = body.get_mut("tools").and_then(|t| t.as_array_mut()) {
+        for tool in tools.iter_mut() {
+            if let Some(func) = tool.get_mut("function").and_then(|f| f.as_object_mut()) {
+                let params = func
+                    .entry("parameters".to_string())
+                    .or_insert_with(|| json!({"type": "object", "properties": {}}));
+                if !params.is_object() {
+                    *params = json!({"type": "object", "properties": {}});
+                } else {
+                    if let Some(pobj) = params.as_object_mut() {
+                        if !pobj.contains_key("type") {
+                            pobj.insert("type".to_string(), json!("object"));
+                        }
+                        if !pobj.contains_key("properties") {
+                            pobj.insert("properties".to_string(), json!({}));
+                        }
+                    }
+                    normalize_json_schema(params);
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Main handler: lossless OpenAI proxy (tools, tool_calls, multimodal parts, stop, ...)
 // ---------------------------------------------------------------------------
@@ -218,6 +290,7 @@ pub async fn chat_completions(
 ) -> Response {
     let req_uuid = Uuid::new_v4();
     let flags = take_harness_flags(&mut body);
+    normalize_openai_request(&mut body);
 
     if !body.get("messages").map(|m| m.is_array()).unwrap_or(false) {
         return openai_error(StatusCode::BAD_REQUEST, "`messages` must be an array", "invalid_request_error");
@@ -579,5 +652,24 @@ mod tests {
         assert!(body["tools"].is_array());
         assert!(body["messages"][0]["tool_calls"].is_array());
         assert!(body["messages"][0]["content"].is_null());
+    }
+
+    #[test]
+    fn normalize_openai_request_fills_missing_tool_properties_and_developer_role() {
+        let mut body = json!({
+            "messages": [
+                {"role": "developer", "content": "sys"},
+                {"role": "assistant", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "noop", "arguments": "{}"}}]}
+            ],
+            "tools": [
+                {"type": "function", "function": {"name": "inline_chat_exit", "parameters": {"type": "object"}}},
+                {"type": "function", "function": {"name": "nested", "parameters": {"type": "object", "properties": {"cfg": {"type": "object"}}}}}
+            ]
+        });
+        normalize_openai_request(&mut body);
+        assert_eq!(body["messages"][0]["role"], "system");
+        assert!(body["messages"][1]["content"].is_null());
+        assert_eq!(body["tools"][0]["function"]["parameters"]["properties"], json!({}));
+        assert_eq!(body["tools"][1]["function"]["parameters"]["properties"]["cfg"]["properties"], json!({}));
     }
 }
