@@ -69,7 +69,11 @@ impl HardwareProfile {
         } else if vram_gb >= 24.0 {
             1008.0 // GDDR6X on RTX 3090/4090
         } else if vram_gb >= 8.0 {
-            504.0  // GDDR6 on RTX 3070/4060
+            if accelerator_name.contains("5060") {
+                448.0 // GDDR7 on RTX 5060 (128-bit @ 28 Gbps = 448 GB/s)
+            } else {
+                504.0 // GDDR6 on RTX 3070/4060 Ti
+            }
         } else {
             64.0   // Dual-channel host DDR5
         };
@@ -82,18 +86,18 @@ impl HardwareProfile {
             } else if host_ram_gb >= 36.0 {
                 ("Apple Silicon UMA: 32B Coder 100% Resident + 1.5B Speculative Drafter (Zero-Copy Metal)".into(), 65536)
             } else if host_ram_gb >= 24.0 {
-                ("Apple Silicon UMA: 27B-32B Coder Q4_K_M Resident + Q8_0/Q4_0 KV Cache".into(), 32768)
+                ("Apple Silicon UMA: 27B-32B Coder Q4_K_M Resident + Q8_0/Q8_0 KV Cache".into(), 32768)
             } else {
                 ("Apple Silicon UMA: 14B Coder Q4_K_S / 30B-A3B MoE Resident + Compact KV Cache".into(), 16384)
             }
         } else if vram_gb >= 24.0 {
-            ("24GB+ VRAM: 32B Coder 100% GPU Resident (-ngl 64) + 1.5B Drafter + FP8/Q8 KV Cache".into(), 65536)
+            ("24GB+ VRAM: 32B Coder 100% GPU Resident (-ngl 64) + 1.5B Drafter + Q8_0 KV Cache".into(), 65536)
         } else if vram_gb >= 16.0 {
-            ("16GB VRAM Hybrid: 32B Coder (-ngl 44) + 100% VRAM 1.5B Drafter (-ngld 99) + Q8_0/Q4_0 KV".into(), 32768)
+            ("16GB VRAM Hybrid: 32B Coder (-ngl 44) + 100% VRAM 1.5B Drafter (-ngld 99) + Q8_0 KV".into(), 32768)
         } else if vram_gb >= 8.0 || host_ram_gb >= 32.0 {
-            ("27B-35B Coder Sweet-Spot: Qwen2.5-Coder-32B (-ngl 17..21) + 100% VRAM 1.5B Speculative Drafter (-ngld 99) + Q8_0/Q4_0 FlashAttn".into(), 32768)
+            ("Qwen3-Coder-30B-A3B 32k Agent Mode (-ngl 99 --n-cpu-moe 37 -c 32768 -ctk q8_0 -ctv q8_0 -fa on -b 2048 -ub 1024 --jinja)".into(), 32768)
         } else {
-            ("Compact Coder Tier: 14B Q4_K_S / 30B-A3B Sparse MoE + Q4_0 KV Cache".into(), 8192)
+            ("Compact Coder Tier: 14B Q4_K_S / 30B-A3B Sparse MoE + Q8_0 KV Cache".into(), 8192)
         };
 
         Self {

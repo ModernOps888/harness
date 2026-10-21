@@ -111,7 +111,7 @@ export const ChatView: React.FC<Props> = ({
                         {msg.confidenceScore && (
                           <span className="font-mono text-cyan-400 flex items-center gap-1">
                             <ShieldCheck className="w-3 h-3" />
-                            {(msg.confidenceScore * 100).toFixed(0)}% factual
+                            {(msg.confidenceScore * 100).toFixed(0)}% entropy score
                           </span>
                         )}
                         <button

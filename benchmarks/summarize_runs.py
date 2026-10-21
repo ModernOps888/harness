@@ -64,7 +64,8 @@ def common_prefix(a, b):
 def main():
     cfgs = sorted(
         c for c in os.listdir(RUNS)
-        if os.path.isdir(os.path.join(RUNS, c)) and c not in ("qwen32b_coder", "elite_coder_trench")
+        if os.path.isdir(os.path.join(RUNS, c))
+        and c not in ("qwen32b_coder", "elite_coder_trench", "agent_ctx", "swe_lite", "humaneval")
     )
     base_res = load(BASELINE)[0] if BASELINE in cfgs else {}
     lines = ["# Raw-captured results (computed from files in `benchmarks/runs/`)", "",
@@ -203,7 +204,7 @@ def build_elite_trench_json_and_md():
     md = [
         "# Skeptic's Trench 30B–32B Coder Torture-Test Ledger (Bare-Metal Verified)",
         "",
-        "Every configuration below was executed on bare metal (**NVIDIA GeForce RTX 5060 8,151 MiB GDDR7 @ 504 GB/s + Intel Core i5-10400F 6C/12T + 32 GB DDR4-2133 dual-channel, PCIe Gen 3 x8**) by [`benchmarks/bench_elite_coder.py`](../../bench_elite_coder.py) under greedy decoding (`temperature = 0.0, top_k = 1, seed = 42`).",
+        "Every configuration below was executed on bare metal (**NVIDIA GeForce RTX 5060 8,151 MiB GDDR7 @ 448 GB/s + Intel Core i5-10400F 6C/12T + 32 GB DDR4-2133 dual-channel, PCIe Gen 3 x8**) by [`benchmarks/bench_elite_coder.py`](../../bench_elite_coder.py) under greedy decoding (`temperature = 0.0, top_k = 1, seed = 1`).",
         "",
         "Unlike synthetic text-only benchmarks, every generated response was automatically compiled and executed against three strict software engineering gates:",
         "1. **`python_dp_and_intervals`**: `merge_intervals` + LeetCode #10 `is_match` regex dynamic programming verified against **10/10 Python assertions**.",
@@ -235,17 +236,78 @@ def build_elite_trench_json_and_md():
         "## Empirical Hardware Laws Discovered in the Skeptic's Trench",
         "",
         "1. **Sparse MoE Hybrid Placement (`m5_qwen3_coder_30b_moe_ncmoe32_pure`: `16.37 tok/s` pooled, `16.53 tok/s` peak — `14.11x` over dense baseline)**:",
-        "   - `Qwen3-Coder-30B-A3B-Instruct` (`Q4_K_M`, 30.5B total parameters, 48 layers, 128 routed experts/layer, top-8 active = 3.3B active parameters/token) offloads **100% of all 48 layers' shared GQA attention projections, KV cache (`78 MiB`), router gates, output head, plus 16 full MoE layers (`6,463.42 MiB` CUDA model buffer)** into the RTX 5060's 504 GB/s GDDR7 via `-ngl 99 --n-cpu-moe 32`.",
+        "   - `Qwen3-Coder-30B-A3B-Instruct` (`Q4_K_M`, 30.5B total parameters, 48 layers, 128 routed experts/layer, top-8 active = 3.3B active parameters/token) offloads **100% of all 48 layers' shared GQA attention projections, KV cache (`78 MiB`), router gates, output head, plus 16 full MoE layers (`6,463.42 MiB` CUDA model buffer)** into the RTX 5060's 448 GB/s GDDR7 via `-ngl 99 --n-cpu-moe 32`.",
         "   - For the 32 MoE layers whose expert weights reside in DDR4 (`11,227.92 MiB`), only `8 / 128 = 6.25%` of routed experts are read per token (`~0.70 GB` DDR4 read/token vs `14.46 GB` for Dense 32B), eliminating 95.2% of the DDR4 bandwidth bottleneck while retaining 30.5B-parameter coding knowledge.",
         "2. **The Sparse MoE Expert-Union Batching Law (`m5` vs `m3` and `m2`)**:",
-        "   - In Dense 32B (`c5_dense32b_0_5b_ngl20_prio`), verifying a speculative batch of $M = K+1 = 8$ tokens reads the exact same `12.91 GiB` of CPU weights as $M = 1$, delivering a **3.36x speedup (`3.90 tok/s` pooled, `4.80 tok/s` peak at `96.2%` draft acceptance)**.",
+        "   - In Dense 32B (`c5_dense32b_0_5b_ngl20_prio`), verifying a speculative batch of $M = K+1 = 8$ tokens reads the exact same `12.61 GiB` (`12,914.54 MiB`) of CPU weights as $M = 1$, delivering a **3.36x speedup (`3.90 tok/s` pooled, `4.80 tok/s` peak at `96.2%` draft acceptance)**.",
         "   - In 128-expert Top-8 Sparse MoE (`Qwen3-Coder-30B-A3B`), $M = 1$ activates exactly 8 experts (`6.25%`) per layer, whereas verifying a batch of $M = 7$ tokens activates the **union** of 7 tokens' Top-8 choices (`~35–45` unique experts/layer = `27%–35%` of each CPU MoE layer), multiplying DDR4 traffic per pass by 4–5x. Consequently, pure zero-draft MoE (`m5`: **`16.37 tok/s`**) outperforms both `ngram-mod` (`m2`: `15.37 tok/s`) and neural-drafted MoE (`m3`: `11.59 tok/s` pooled).",
         "3. **The Windows WDDM `~6,650 MiB` Physical GDDR7 Spillover Cliff (`m5` vs `m4`, `c5` vs `c6`)**:",
         "   - On an 8,151 MiB GPU under Windows 11 WDDM, pushing total CUDA allocation from `6,579 MiB` (`--n-cpu-moe 32`, `m5`: **`16.37 tok/s`**) to `6,920 MiB` (`--n-cpu-moe 31`, `m4`: `13.04 tok/s`) or from `6,565 MiB` (`-ngl 20`, `c5`: **`3.90 tok/s`**) to `6,845 MiB` (`-ngl 21`, `c6`: `3.39 tok/s`) causes WDDM to silently evict ~200–250 MiB of pages into Shared GPU Memory over PCIe Gen 3 x8, degrading throughput by 13%–20%.",
+        "4. **The Long-Context (`16k–64k`) GPU Prefill & Symmetric `q8_0/q8_0` KV Law (`benchmarks/runs/agent_ctx/`)**:",
+        "   - Mixed `-ctk q8_0 -ctv q4_0` KV quantization lacks a fast CUDA FlashAttention kernel in `llama-server` and, combined with `--no-op-offload -b 512 -ub 256`, collapses prefill to `27.40 tok/s` and decode at 3.1k depth to `5.67 tok/s` (`h_ctx16k_q8q4_ncmoe34_control`).",
+        "   - Switching to symmetric **`-ctk q8_0 -ctv q8_0 -fa on -b 2048 -ub 1024` (without `--no-op-offload`)** engages CUDA FlashAttention and GPU batch prefill at full `13,801 MHz` GDDR7 memory clock (`448 GB/s`), boosting prefill **15x** (`411.27 tok/s` at 16k ctx, **`446.86–452.53 tok/s` at 32k ctx**, `380.52 tok/s` at 64k ctx) and sustaining **`19.88–21.40 tok/s` decode** at 16k–32k context (`14.04–18.86 tok/s` at 64k context).",
         "",
     ]
     open(os.path.join(tdir, "ELITE_CODER_RESULTS.md"), "w", encoding="utf-8").write("\n".join(md))
     return data
+
+
+def build_agent_ctx_json():
+    adir = os.path.join(RUNS, "agent_ctx")
+    if not os.path.isdir(adir):
+        return None
+    out = []
+    for fn in sorted(os.listdir(adir)):
+        if fn.endswith(".json"):
+            fp = os.path.join(adir, fn)
+            try:
+                out.append(json.load(open(fp, encoding="utf-8")))
+            except Exception:
+                pass
+    return out or None
+
+
+def build_swe_lite_json():
+    sdir = os.path.join(RUNS, "swe_lite")
+    fp = os.path.join(sdir, "qwen3_30b_a3b_agent32k.json")
+    if not os.path.exists(fp):
+        return None
+    d = json.load(open(fp, encoding="utf-8"))
+    summary = {
+        "tag": "qwen3_30b_a3b_agent32k",
+        "tasks": len(d),
+        "visible_pass": sum(bool(x.get("visible_pass")) for x in d),
+        "hidden_pass": sum(bool(x.get("hidden_pass")) for x in d),
+        "resolved": sum(bool(x.get("resolved")) for x in d),
+        "resolved_pct": round(100.0 * sum(bool(x.get("resolved")) for x in d) / max(len(d), 1), 1),
+        "total_turns": sum(x.get("turns", 0) for x in d),
+        "total_tool_calls": sum(len(x.get("tool_calls", [])) for x in d),
+        "total_prompt_tokens": sum(x.get("prompt_tokens", 0) for x in d),
+        "total_completion_tokens": sum(x.get("completion_tokens", 0) for x in d),
+        "total_wall_s": round(sum(x.get("wall_s", 0.0) for x in d), 1),
+        "mean_decode_tps": round(
+            sum(sum(x.get("decode_tps", [])) for x in d)
+            / max(sum(len(x.get("decode_tps", [])) for x in d), 1),
+            2,
+        ),
+        "per_task": [
+            {
+                "id": x["id"],
+                "resolved": x["resolved"],
+                "visible_pass": x["visible_pass"],
+                "hidden_pass": x["hidden_pass"],
+                "turns": x["turns"],
+                "tool_calls": len(x.get("tool_calls", [])),
+                "prompt_tokens": x.get("prompt_tokens", 0),
+                "completion_tokens": x.get("completion_tokens", 0),
+                "mean_tps": round(sum(x["decode_tps"]) / max(len(x["decode_tps"]), 1), 2),
+                "wall_s": x["wall_s"],
+            }
+            for x in d
+        ],
+    }
+    print("SWE-Lite Summary:", json.dumps(summary, indent=2))
+    return summary
 
 
 def write_json(cfgs, base_res):
@@ -296,6 +358,15 @@ def write_json(cfgs, base_res):
     elite_trench = build_elite_trench_json_and_md()
     if elite_trench:
         out["elite_coder_trench"] = elite_trench
+    agent_ctx = build_agent_ctx_json()
+    if agent_ctx:
+        out["agent_ctx"] = agent_ctx
+    swe_lite = build_swe_lite_json()
+    if swe_lite:
+        out["swe_lite"] = swe_lite
+    he_fp = os.path.join(RUNS, "humaneval", "qwen3_30b_a3b_he20", "generation_summary.json")
+    if os.path.exists(he_fp):
+        out["humaneval_plus"] = json.load(open(he_fp, encoding="utf-8"))
     with open(os.path.join(RUNS, "results.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
     extra = ["", "## Computed cross-check: implied CPU-side weight read rate (plain autoregressive configs only)", "",

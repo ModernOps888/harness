@@ -80,7 +80,7 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
               Throughput (tokens/sec) &le; (1 + &alpha;&middot;K) &times; Memory Bandwidth (GB/s) / CPU-Resident Weight Size (GB)
             </div>
             <p className="text-slate-400 leading-relaxed">
-              On RTX 5060 8GB + DDR4-2133, <strong>Qwen2.5-Coder-32B Q4_K_M</strong> accelerates from <strong>1.16 tok/s</strong> (raw baseline) to <strong>1.58 tok/s</strong> (Q8_0/Q4_0 KV + 21 GPU layers) and <strong>2.99 tok/s pooled / 3.65 tok/s peak (+157.8%)</strong> with the 1.5B speculative drafter (68.7% acceptance).
+              On RTX 5060 8GB (448 GB/s GDDR7) + DDR4-2133, <strong>Qwen3-Coder-30B-A3B Q4_K_M</strong> achieves <strong>446.9 tok/s GPU prefill</strong> and <strong>19.88-21.40 tok/s decode</strong> at 32,768 context (and 380.5 tok/s prefill / 14.04 tok/s decode at 65,536 context), while <strong>Qwen2.5-Coder-32B Dense</strong> accelerates from <strong>1.16 tok/s</strong> (raw baseline) to <strong>3.90 tok/s pooled / 4.80 tok/s peak</strong> with the 0.5B speculative drafter.
             </p>
           </div>
 
@@ -97,8 +97,8 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
                     <th className="py-2.5 px-3 font-semibold">Platform &amp; Memory Tier</th>
                     <th className="py-2.5 px-3 font-semibold">Interconnect Bus</th>
                     <th className="py-2.5 px-3 font-semibold">Active Bandwidth</th>
-                    <th className="py-2.5 px-3 font-semibold">14B Coder (8.3GB)</th>
-                    <th className="py-2.5 px-3 font-semibold">32B Coder (19.8GB)</th>
+                    <th className="py-2.5 px-3 font-semibold">14B Coder (8.5GB)</th>
+                    <th className="py-2.5 px-3 font-semibold">30B-A3B MoE / 32B Coder</th>
                     <th className="py-2.5 px-3 font-semibold">70B (Q2_K 26.4GB)</th>
                   </tr>
                 </thead>
@@ -106,9 +106,9 @@ export const HardwareModal: React.FC<HardwareModalProps> = ({ isOpen, onClose, h
                   <tr className="hover:bg-slate-900/40 bg-emerald-950/20">
                     <td className="py-2.5 px-3 font-sans font-bold text-emerald-300">PC with RTX 5060 8GB (Verified Local)</td>
                     <td className="py-2.5 px-3 text-slate-400">PCIe 3.0 x8 + DDR4-2133 dual-channel</td>
-                    <td className="py-2.5 px-3 text-slate-300">34.1 GB/s RAM / 272 GB/s VRAM</td>
-                    <td className="py-2.5 px-3 text-emerald-400">~8.5 to 14.2 tok/s</td>
-                    <td className="py-2.5 px-3 text-emerald-400 font-bold">2.99 - 3.65 tok/s (Verified)</td>
+                    <td className="py-2.5 px-3 text-slate-300">34.1 GB/s RAM / 448 GB/s GDDR7</td>
+                    <td className="py-2.5 px-3 text-emerald-400">15.89 - 19.17 tok/s (Verified)</td>
+                    <td className="py-2.5 px-3 text-emerald-400 font-bold">19.9-21.4 tok/s MoE / 3.9-4.8 Dense</td>
                     <td className="py-2.5 px-3 text-slate-300">1.38 tok/s (Verified)</td>
                   </tr>
                   <tr className="hover:bg-slate-900/40 opacity-75">

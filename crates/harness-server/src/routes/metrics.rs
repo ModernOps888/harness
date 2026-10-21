@@ -18,6 +18,7 @@ pub struct EngineMetrics {
     pub speculative_acceptance_rate: f32,
     pub vram_used_mb: usize,
     pub vram_total_mb: usize,
+    pub gpu_utilization_percent: f32,
     pub ram_used_mb: usize,
     // Bio-evolutionary metrics
     pub lif_spiking_sparsity: f32,
@@ -70,67 +71,63 @@ pub async fn proof_handler() -> (axum::http::StatusCode, [(&'static str, &'stati
     )
 }
 
+/// Real GPU numbers from `nvidia-smi` (memory used/total in MiB, utilization %). None if unavailable.
+fn gpu_snapshot() -> Option<(usize, usize, f32)> {
+    let out = std::process::Command::new("nvidia-smi")
+        .args(["--query-gpu=memory.used,memory.total,utilization.gpu", "--format=csv,noheader,nounits"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next()?;
+    let mut it = first.split(',').map(|x| x.trim());
+    let used = it.next()?.parse::<usize>().ok()?;
+    let total = it.next()?.parse::<usize>().ok()?;
+    let util = it.next()?.parse::<f32>().ok()?;
+    Some((used, total, util))
+}
+
+/// `GET /metrics`
+///
+/// MEASURED here: uptime, tokens streamed and decode tok/s from the backend's own `timings` of the
+/// last request, GPU memory and utilization from `nvidia-smi`, backend reachability.
+/// NOT measured (always reported as 0): speculative acceptance, spiking sparsity, hippocampal ratio,
+/// stigmergy, host RAM. The `paged_attn_*` / KV-fragmentation fields come from HARNESS' own
+/// bookkeeping structure, which is not llama-server's real KV cache.
 pub async fn metrics_handler(State(state): State<AppState>) -> Json<EngineMetrics> {
     let uptime = state.start_time.elapsed().as_secs();
     let total_tokens = state.total_tokens_streamed.load(Ordering::Relaxed);
     let model = state.model_name.read().unwrap().clone();
     let measured_tok_s = *state.last_measured_tok_s.read().unwrap();
 
-    let paged = state.paged_attn.lock().unwrap();
-    let free_blocks = paged.free_block_count();
-    let total_blocks = paged.total_block_count();
-    let frag_ratio = paged.memory_fragmentation_ratio();
-    drop(paged);
+    let (free_blocks, total_blocks, frag_ratio) = {
+        let paged = state.paged_attn.lock().unwrap();
+        (paged.free_block_count(), paged.total_block_count(), paged.memory_fragmentation_ratio())
+    };
 
-    let spec = state.speculative.lock().unwrap();
-    let acceptance_rate = spec.acceptance_rate();
-    drop(spec);
-
-    let mem = state.device_mgr.snapshot();
     let hw = HardwareProfile::auto_detect();
-
-    let lower = model.to_lowercase();
-    let current_tok_per_sec = if measured_tok_s > 0.0 {
-        (measured_tok_s * 100.0).round() / 100.0
-    } else if lower.contains("30b") || lower.contains("moe") {
-        16.37 // Verified m5_qwen3_coder_30b_moe_ncmoe32_pure pooled tok/s
-    } else if lower.contains("14b") {
-        15.89 // Verified d1_qwen25_coder_14b_spec_0_5b pooled tok/s
-    } else if lower.contains("32b") {
-        3.90 // Verified c5_dense32b_0_5b_ngl20_prio pooled tok/s
-    } else if lower.contains("70b") {
-        1.68 // Verified c3_draft1b_k4 pooled tok/s
-    } else {
-        16.37
-    };
-
-    let vram_total_mb = if mem.total_bytes > 0 {
-        mem.total_bytes / (1024 * 1024)
-    } else {
-        (hw.vram_gb * 1024.0) as usize
-    };
-    let vram_used_mb = if mem.allocated_bytes > 0 {
-        mem.allocated_bytes / (1024 * 1024)
-    } else {
-        6579 // Verified RTX 5060 GDDR7 sweet-spot allocation (--n-cpu-moe 32 / -ngl 20)
-    };
+    let gpu = tokio::task::spawn_blocking(gpu_snapshot).await.ok().flatten();
+    let backend_up = state.backend.config.is_available().await;
 
     Json(EngineMetrics {
-        status: "healthy".into(),
+        status: if backend_up { "healthy".into() } else { "backend_unreachable".into() },
         uptime_seconds: uptime,
         active_model: model,
         total_tokens_streamed: total_tokens,
-        current_tok_per_sec,
+        current_tok_per_sec: (measured_tok_s * 100.0).round() / 100.0,
         paged_attn_free_blocks: free_blocks,
         paged_attn_total_blocks: total_blocks,
         kv_cache_fragmentation_ratio: frag_ratio,
-        speculative_acceptance_rate: if acceptance_rate > 0.0 { acceptance_rate } else { 0.854 },
-        vram_used_mb,
-        vram_total_mb,
-        ram_used_mb: 11228,
-        lif_spiking_sparsity: 0.75,
+        speculative_acceptance_rate: 0.0,
+        vram_used_mb: gpu.map(|g| g.0).unwrap_or(0),
+        vram_total_mb: gpu.map(|g| g.1).unwrap_or(0),
+        gpu_utilization_percent: gpu.map(|g| g.2).unwrap_or(0.0),
+        ram_used_mb: 0,
+        lif_spiking_sparsity: 0.0,
         hippocampal_compression_ratio: 0.0,
-        lateral_inhibition_contrast: 1.8,
+        lateral_inhibition_contrast: 0.0,
         stigmergic_active_trails: 0,
         hardware: hw,
     })

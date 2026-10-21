@@ -59,17 +59,17 @@ export const MetricsBar: React.FC<MetricsProps> = ({
             <span className="font-mono text-indigo-300">
               {hardware?.is_unified_memory
                 ? `Apple Silicon UMA (${hardware.memory_bandwidth_gbps.toFixed(0)} GB/s Zero-Copy)`
-                : `PCIe 3.0 x8 (~7.9 GB/s theoretical) | VRAM Peak: ${hardware?.memory_bandwidth_gbps.toFixed(0) || '504'} GB/s`}
+                : `PCIe 3.0 x8 (~7.9 GB/s theoretical) | VRAM Peak: ${hardware?.memory_bandwidth_gbps.toFixed(0) || '448'} GB/s`}
             </span>
           </span>
         </div>
 
         <div className="flex items-center gap-3 font-mono text-[10px]">
           <span className="px-2 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 text-slate-300">
-            WDDM Sweet Spot: &le; 6,650 MiB GDDR7
+            32k Agent VRAM: 7,365 MiB / 8,151 MiB GDDR7
           </span>
           <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 text-emerald-400">
-            Strategy: -ngl 99 --n-cpu-moe 32 (16.37 tok/s)
+            Agent 32k: --n-cpu-moe 37 q8_0/q8_0 (19.9-21.4 tok/s | 446.9 tok/s prefill)
           </span>
         </div>
       </div>
@@ -95,15 +95,16 @@ export const MetricsBar: React.FC<MetricsProps> = ({
 
       {/* TTFT Latency */}
       <div className="bg-[#111827] border border-slate-800/80 rounded-xl p-3 flex flex-col justify-between">
-        <div className="flex items-center text-xs text-slate-400">
+        <div className="flex items-center justify-between text-xs text-slate-400">
           <span className="flex items-center gap-1.5 font-medium">
             <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            Prefill Speed
+            GPU Prefill (32k)
           </span>
+          <span className="text-[10px] bg-cyan-500/10 text-cyan-300 px-1.5 py-0.5 rounded border border-cyan-500/20">q8_0/q8_0</span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
           <span className="text-2xl font-bold font-mono text-cyan-300">
-            78.0
+            446.9
           </span>
           <span className="text-xs text-slate-500 font-mono">tok/s</span>
         </div>
@@ -181,11 +182,11 @@ export const MetricsBar: React.FC<MetricsProps> = ({
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             Confidence
           </span>
-          <span className="text-[10px] bg-emerald-500/10 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/20">Calibrated</span>
+          <span className="text-[10px] bg-emerald-500/10 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/20">Heuristic</span>
         </div>
         <div className="mt-2 flex items-baseline gap-1">
           <span className="text-2xl font-bold font-mono text-emerald-300">{(confidenceScore * 100).toFixed(0)}%</span>
-          <span className="text-xs text-slate-500 font-mono">factual</span>
+          <span className="text-xs text-slate-500 font-mono">entropy score</span>
         </div>
       </div>
     </div>

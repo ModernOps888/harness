@@ -1,0 +1,3 @@
+EvalPlus evaluation (12 problems):
+humaneval (base tests): 12/12 = 100.0%
+humaneval+ (base + 80x EvalPlus extra tests): 12/12 = 100.0%

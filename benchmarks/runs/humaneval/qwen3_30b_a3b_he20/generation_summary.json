@@ -1,0 +1,61 @@
+{
+ "problems": 12,
+ "completion_tokens": 4793,
+ "mean_decode_tps": 16.56,
+ "generation_wall_s": 315.5,
+ "truncated": 0,
+ "base_pass": 12,
+ "plus_pass": 12,
+ "base_pass_rate": 1.0,
+ "plus_pass_rate": 1.0,
+ "per_task": {
+  "HumanEval/0": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/1": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/2": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/3": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/4": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/5": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/6": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/7": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/8": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/9": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/10": {
+   "base_pass": true,
+   "plus_pass": true
+  },
+  "HumanEval/11": {
+   "base_pass": true,
+   "plus_pass": true
+  }
+ }
+}

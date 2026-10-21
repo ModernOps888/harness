@@ -1,132 +1,70 @@
 use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Serialize;
+use serde_json::{json, Value};
+
+use crate::routes::chat::openai_error;
 use crate::state::AppState;
 
-#[derive(Debug, Serialize)]
-pub struct ModelCard {
-    pub id: String,
-    pub object: String,
-    pub created: i64,
-    pub owned_by: String,
-    pub architecture: String,
-    pub quantization: String,
-    pub context_length: usize,
-    pub hardware_tier: String,
-    pub sparse_routing: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct ModelListResponse {
-    pub object: String,
-    pub data: Vec<ModelCard>,
-}
-
-pub async fn list_models(State(state): State<AppState>) -> Json<ModelListResponse> {
-    let current_name = state.model_name.read().unwrap().clone();
-    let config = state.model_config.read().unwrap().clone();
-
-    let backend_models: Vec<String> = state.backend.list_models().await;
-    let mut models = Vec::new();
-
-    for m in backend_models {
-        models.push(ModelCard {
-            id: m.clone(),
-            object: "model".into(),
-            created: 1727654400,
-            owned_by: "local-backend".into(),
-            architecture: "Transformer".into(),
-            quantization: "Native".into(),
-            context_length: config.max_position_embeddings,
-            hardware_tier: "Active Hardware Accelerated".into(),
-            sparse_routing: "Direct Execution".into(),
-        });
+/// `GET /v1/models`
+///
+/// Lists **only models the inference backend actually serves right now** (llama-server `--alias`
+/// names, Ollama tags, ...). Each entry is the backend's own object, so fields such as
+/// `meta.n_ctx_train` reach IDE clients unchanged. Nothing is synthesized: a model that is not
+/// loaded is not advertised.
+pub async fn list_models(State(state): State<AppState>) -> Response {
+    let url = format!("{}/v1/models", state.backend.config.base_url.trim_end_matches('/'));
+    let mut req = state.backend.client.get(&url);
+    if let Some(ref k) = state.backend.config.api_key {
+        req = req.header("Authorization", format!("Bearer {}", k));
     }
 
-    if !models.iter().any(|m| m.id == current_name) {
-        models.push(ModelCard {
-            id: current_name,
-            object: "model".into(),
-            created: 1727654400,
-            owned_by: "harness".into(),
-            architecture: format!("{:?}", config.architecture),
-            quantization: format!("{:?}", config.quantization),
-            context_length: config.max_position_embeddings,
-            hardware_tier: "RTX 5060 8GB VRAM (-ngl 17) + 1.5B Drafter (-ngld 99) / 32GB Host RAM".into(),
-            sparse_routing: "Speculative Drafter (69% Acceptance) + GQA 40:8 FlashAttn".into(),
-        });
-    }
-
-    // Ensure the 27B-35B Coder catalog is always available
-    let coder_catalog = [
-        (
-            "qwen2.5-coder:32b",
-            "Qwen2_5",
-            "Q4_K_M",
-            32768,
-            "RTX 5060 8GB VRAM (-ngl 17..21) + 1.5B Drafter (-ngld 99); verified 2.99-3.65 tok/s",
-            "Speculative 1.5B Drafter (69% Acceptance) + Q8_0/Q4_0 KV Cache",
-        ),
-        (
-            "qwen2.5-coder:14b-instruct-q4_K_S",
-            "Qwen2_5",
-            "Q4_K_S",
-            32768,
-            "RTX 5060 8GB VRAM + Host RAM (8.6 GB); high-speed mid-tier coder",
-            "GQA 40:8 + Q8_0/Q4_0 FlashAttention",
-        ),
-        (
-            "qwen3-30b-a3b",
-            "Qwen3_MoE",
-            "Q4_K_M",
-            32768,
-            "Sparse MoE (30.5B Total / 3.0B Active, 128 Experts Top-8)",
-            "Hot-Expert VRAM Cache + Active Top-8 Routing",
-        ),
-        (
-            "qwen2.5-coder:7b",
-            "Qwen2_5",
-            "Q4_K_M",
-            32768,
-            "RTX 5060 8GB VRAM 100% resident (4.7 GB); verified 47+ tok/s",
-            "Direct 100% VRAM Execution",
-        ),
-        (
-            "qwen2.5-coder:1.5b",
-            "Qwen2_5",
-            "Q4_K_M",
-            32768,
-            "RTX 5060 8GB VRAM 100% resident (1.0 GB); speculative drafter (-ngld 99)",
-            "Speculative Draft Engine",
-        ),
-        (
-            "llama3.1:70b-instruct-q2_K",
-            "Llama3_1",
-            "Q2_K",
-            131072,
-            "RTX 5060 8GB VRAM + 32GB host RAM (hybrid GPU/CPU offload); see /proof",
-            "Hybrid Offload + Speculative Verification",
-        ),
-    ];
-
-    for (id, arch, quant, ctx, tier, routing) in coder_catalog {
-        if !models.iter().any(|m| m.id == id) {
-            models.push(ModelCard {
-                id: id.into(),
-                object: "model".into(),
-                created: 1727654400,
-                owned_by: "harness-coder-tier".into(),
-                architecture: arch.into(),
-                quantization: quant.into(),
-                context_length: ctx,
-                hardware_tier: tier.into(),
-                sparse_routing: routing.into(),
-            });
+    let resp = match req.send().await {
+        Ok(r) if r.status().is_success() => r,
+        Ok(r) => {
+            return openai_error(
+                StatusCode::BAD_GATEWAY,
+                format!("Backend /v1/models returned HTTP {}", r.status()),
+                "bad_gateway",
+            )
         }
-    }
+        Err(e) => {
+            return openai_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!(
+                    "No inference backend reachable at {} ({}). Start it with ./launch_qwen32b_coder.ps1",
+                    state.backend.config.base_url, e
+                ),
+                "backend_unavailable",
+            )
+        }
+    };
 
-    Json(ModelListResponse {
-        object: "list".into(),
-        data: models,
-    })
+    let parsed: Value = resp.json().await.unwrap_or_else(|_| json!({}));
+    let data: Vec<Value> = parsed["data"].as_array().cloned().unwrap_or_default();
+
+    Json(json!({
+        "object": "list",
+        "data": data,
+    }))
+    .into_response()
+}
+
+/// `GET /props` ? llama-server runtime properties (notably `default_generation_settings.n_ctx`,
+/// the context the engine was actually launched with). IDE clients use it to size prompts.
+pub async fn props(State(state): State<AppState>) -> Response {
+    let url = format!("{}/props", state.backend.config.base_url.trim_end_matches('/'));
+    match state.backend.client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => {
+            let v: Value = r.json().await.unwrap_or_else(|_| json!({}));
+            Json(v).into_response()
+        }
+        Ok(r) => openai_error(StatusCode::BAD_GATEWAY, format!("Backend /props returned HTTP {}", r.status()), "bad_gateway"),
+        Err(e) => openai_error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!("No inference backend reachable at {} ({})", state.backend.config.base_url, e),
+            "backend_unavailable",
+        ),
+    }
 }

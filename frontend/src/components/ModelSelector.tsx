@@ -15,11 +15,11 @@ export interface ModelOption {
 export const AVAILABLE_MODELS: ModelOption[] = [
   {
     id: 'qwen3-30b-a3b',
-    name: 'Qwen3 Coder: 30B-A3B MoE',
+    name: 'Qwen3 Coder: 30B-A3B MoE (Agent 32k)',
     family: 'Alibaba Cloud (48L, 128x8 Experts)',
     params: '30.5B Total / 3.3B Active',
-    quant: 'Q4_K_M (16.37 tok/s | 3/3 PASS)',
-    context: '32k',
+    quant: 'Q4_K_M (19.9-21.4 tok/s | 447 tok/s prefill)',
+    context: '32k-64k (q8_0/q8_0)',
     mode: 'Sparse-MoE',
     badgeColor: 'border-emerald-500/40 text-emerald-400 bg-emerald-500/10',
   },

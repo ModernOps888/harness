@@ -24,3 +24,6 @@ Thumbs.db
 screenshot.png
 
 __pycache__/
+
+.vscode-test/
+vscode-extension/node_modules/

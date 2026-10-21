@@ -1,0 +1,1 @@
+These runs are INVALID for KV-cache comparisons: a bug in bench_agent_ctx.py dropped the -ctk/-ctv flags, so the server ran with its default KV type (not the q8_0/q4_0 named in the run). Kept only for the record. Superseded by the corrected runs in the parent directory.

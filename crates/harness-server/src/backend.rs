@@ -268,12 +268,38 @@ pub struct OllamaPsModel {
 
 impl BackendProxy {
     pub fn new(config: BackendConfig) -> Self {
+        // No *total* request timeout: a streamed generation (after a multi-minute prefill) can
+        // legitimately run for many minutes. Bound connect and inter-byte silence instead; the
+        // silence bound must exceed the longest prefill (llama-server sends nothing meanwhile).
         let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_secs))
+            .connect_timeout(Duration::from_secs(10))
+            .read_timeout(Duration::from_secs(config.timeout_secs.max(1800)))
             .build()
             .unwrap_or_default();
 
         Self { config, client }
+    }
+
+    /// Forward an OpenAI-format JSON body verbatim to the backend's `/v1/<path>` endpoint.
+    ///
+    /// Both llama.cpp `llama-server` and Ollama expose the OpenAI wire format under `/v1/`, so
+    /// this is the single lossless path used for chat (incl. `tools` / `tool_calls`), FIM
+    /// completions and embeddings. Nothing in `body` is rewritten except what the caller
+    /// already changed (the resolved model id).
+    pub async fn forward_json(
+        &self,
+        path: &str,
+        body: &serde_json::Value,
+    ) -> Result<reqwest::Response, BackendError> {
+        let url = format!("{}/{}", self.config.base_url.trim_end_matches('/'), path.trim_start_matches('/'));
+        let mut request = self.client.post(url).json(body);
+        if let Some(ref key) = self.config.api_key {
+            request = request.header("Authorization", format!("Bearer {}", key));
+        }
+        request
+            .send()
+            .await
+            .map_err(|e| BackendError::ConnectionFailed(e.to_string()))
     }
 
     /// List models currently loaded and resident in memory on the backend

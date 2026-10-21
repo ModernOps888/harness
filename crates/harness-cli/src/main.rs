@@ -26,7 +26,7 @@ struct Cli {
 enum Commands {
     /// Start the OpenAI-compatible HTTP/SSE API server
     Serve {
-        #[arg(short, long, default_value = "8080")]
+        #[arg(short, long, default_value = "8090")]
         port: u16,
         #[arg(short, long, default_value = "default")]
         model: String,
@@ -193,7 +193,7 @@ async fn main() -> anyhow::Result<()> {
             *state.model_name.write().unwrap() = model;
 
             let app = harness_server::routes::create_router(state);
-            let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
+            let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
             let listener = tokio::net::TcpListener::bind(addr).await?;
             axum::serve(listener, app).await?;
         }

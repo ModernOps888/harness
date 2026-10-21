@@ -31,7 +31,7 @@ export const LayerStreamVisualizer: React.FC<Props> = ({ activeModel, isStreamin
           <Waves className="w-4 h-4 text-cyan-400" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200">
             {is30bMoe
-              ? 'Qwen3-Coder-30B-A3B Hybrid Sparse MoE Schedule (48/48 Attn + 16/48 Full MoE in 8GB GDDR7)'
+              ? 'Qwen3-Coder-30B-A3B Hybrid Sparse MoE Schedule (48/48 Attn + 11–16 Full MoE Layers in 8GB GDDR7)'
               : is70b
               ? '70B Layer Streaming Schedule (80 Layers, 11/81 GPU + 1B Drafter in VRAM)'
               : is14b
@@ -41,7 +41,7 @@ export const LayerStreamVisualizer: React.FC<Props> = ({ activeModel, isStreamin
         </div>
         <span className="text-xs font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-800/40 px-2 py-0.5 rounded">
           {is30bMoe
-            ? '-ngl 99 --n-cpu-moe 32 | 16.37 tok/s pooled / 16.53 tok/s peak'
+            ? '32k Agent (--n-cpu-moe 37 q8_0/q8_0): 19.9-21.4 tok/s decode | 446.9 tok/s prefill'
             : is70b
             ? 'Ping-Pong Double Buffer DMA (1.68 tok/s)'
             : is14b
@@ -57,15 +57,15 @@ export const LayerStreamVisualizer: React.FC<Props> = ({ activeModel, isStreamin
             <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
               <Cpu className="w-3.5 h-3.5" />
               {is30bMoe
-                ? 'Slot 0: RTX 5060 8GB GDDR7 (100% Attn/KV/Router + 16 Full MoE Layers, 6,463 MiB)'
+                ? 'Slot 0: RTX 5060 8GB GDDR7 (100% Attn/KV/Router + 11-16 Full MoE Layers, 7,365 MiB @ 32k ctx)'
                 : `Slot 0: RTX 5060 8GB Active GDDR7 (${gpuOffloadedLayers}/${totalLayers + 1} Layers)`}
             </span>
             <span className="text-[11px] font-mono text-slate-400">Layer #{currentLayer}</span>
           </div>
           <p className="text-xs text-slate-400">
             {is30bMoe
-              ? 'Executing 48-layer GQA FlashAttention (Q8_0 K / Q4_0 V) + Top-8 Softmax Router + 16 Resident MoE Layers at 504 GB/s'
-              : 'Executing GQA 40:8 FlashAttention (Q8_0 K / Q4_0 V) + 100% GPU-Resident 0.5B Speculative Drafter (--no-op-offload)'}
+              ? 'Executing 48-layer GQA CUDA FlashAttention (-ctk q8_0 -ctv q8_0 -b 2048 -ub 1024) + Top-8 Router + Resident MoE Layers at 448 GB/s'
+              : 'Executing GQA 40:8 FlashAttention + 100% GPU-Resident 0.5B Speculative Drafter'}
           </p>
         </div>
 
@@ -75,14 +75,14 @@ export const LayerStreamVisualizer: React.FC<Props> = ({ activeModel, isStreamin
             <span className="flex items-center gap-1.5 text-cyan-400 font-semibold">
               <HardDrive className="w-3.5 h-3.5" />
               {is30bMoe
-                ? 'Slot 1: Dual-Channel DDR4 Active Expert Stream (32 MoE Layers, 8/128 Active)'
+                ? 'Slot 1: Dual-Channel DDR4 Active Expert Stream (32-37 MoE Layers, 8/128 Active)'
                 : 'Slot 1: Dual-Channel DDR4 Batched M=K+1 Speculative Verification'}
             </span>
             <span className="text-[11px] font-mono text-slate-400">Layer #{(currentLayer + 1) % totalLayers}</span>
           </div>
           <p className="text-xs text-slate-400">
             {is30bMoe
-              ? 'Reading only 6.25% (8/128) routed experts per token (~0.70 GB/tok vs 14.46 GB Dense 32B -> 95.2% DDR4 traffic eliminated)'
+              ? 'Reading only 6.25% (8/128) routed experts per token (~0.70-0.81 GB/tok vs 14.46 GB Dense 32B -> 94-95% DDR4 traffic eliminated)'
               : 'Batch-verifying K=7 draft tokens in 1 weight sweep (85.4% pooled / 96.2% Rust draft acceptance, 40 graph splits)'}
           </p>
         </div>

@@ -1,7 +1,6 @@
 use harness_server::routes::create_router;
 use harness_server::AppState;
 use std::net::SocketAddr;
-use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -16,14 +15,10 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState::new();
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // CORS is configured (loopback-only) inside `create_router`.
+    let app = create_router(state);
 
-    let app = create_router(state).layer(cors);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8090));
     info!("🚀 HARNESS Server listening on http://{}", addr);
     info!("🔗 OpenAI API endpoint: http://{}/v1/chat/completions", addr);
     info!("📊 Telemetry & safety metrics: http://{}/metrics", addr);

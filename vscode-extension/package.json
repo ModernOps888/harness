@@ -1,0 +1,116 @@
+{
+  "name": "harness-vscode",
+  "displayName": "HARNESS Local Models",
+  "description": "Use locally served HARNESS models (Qwen3-Coder-30B-A3B, Qwen2.5-Coder) in VS Code's native Chat, including native tool calling / agent mode.",
+  "version": "0.1.0",
+  "publisher": "harness-local",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onLanguageModelChatProvider:harness"
+  ],
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "harness",
+        "displayName": "HARNESS (local)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "harness.refreshModels",
+        "title": "HARNESS: Refresh Models"
+      },
+      {
+        "command": "harness.showLog",
+        "title": "HARNESS: Show Request Log"
+      },
+      {
+        "command": "harness.startEngine",
+        "title": "HARNESS: Start Engine"
+      }
+    ],
+    "configuration": {
+      "title": "HARNESS",
+      "properties": {
+        "harness.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:8090/v1",
+          "description": "OpenAI-compatible base URL of `harness-cli serve`.",
+          "scope": "machine"
+        },
+        "harness.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token (the local server does not require one).",
+          "scope": "machine"
+        },
+        "harness.maxOutputTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum tokens generated per response.",
+          "scope": "machine"
+        },
+        "harness.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Sampling temperature (low values make tool calling more reliable)."
+        },
+        "harness.launchScript": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path of the PowerShell script that starts the HARNESS engine (used by the 'HARNESS: Start Engine' command).",
+          "scope": "machine"
+        },
+        "harness.topP": {
+          "type": "number",
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "scope": "machine",
+          "description": "Nucleus sampling (Qwen3-Coder model-card value 0.8)."
+        },
+        "harness.topK": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "scope": "machine",
+          "description": "Top-k sampling (Qwen3-Coder model-card value 20)."
+        },
+        "harness.repeatPenalty": {
+          "type": "number",
+          "default": 1.05,
+          "minimum": 0.5,
+          "maximum": 2,
+          "scope": "machine",
+          "description": "Repetition penalty (Qwen3-Coder model-card value 1.05)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test:unit": "node --test test/unit.test.js",
+    "test:integration": "node test/run-integration.js"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.5.2"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Endpoint and launch settings are machine-scoped and ignored from workspace settings."
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ModernOps888/harness"
+  }
+}
