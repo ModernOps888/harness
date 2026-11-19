@@ -1,6 +1,5 @@
 # 🚀 HARNESS: Local 30B–32B Coder Agent Engine, Native VS Code Multi-Tool Chat Provider & Rust GPU/Safety Suite
 
-[![Multi-Platform CI](https://github.com/ModernOps888/harness/actions/workflows/ci.yml/badge.svg)](https://github.com/ModernOps888/harness)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust 1.85+](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![VS Code Native Chat](https://img.shields.io/badge/VS%20Code-Native%20Chat%20%2B%20Multi--Tool%20Agent-007ACC.svg)](vscode-extension/)
